@@ -1,0 +1,15 @@
+{
+  "name": "freesurf-natural-reader-worker",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260718.1",
+    "typescript": "^5.6.0",
+    "wrangler": "^4.112.0"
+  }
+}

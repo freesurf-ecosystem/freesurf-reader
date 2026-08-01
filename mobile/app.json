@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "FreeSurf Natural Reader",
+    "slug": "freesurf-natural-reader",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "freesurf-reader",
+    "splash": { "backgroundColor": "#0b1020" },
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "tools.freesurf.reader",
+      "versionCode": 1
+    },
+    "ios": {
+      "bundleIdentifier": "tools.freesurf.reader",
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+          }
+        ]
+      }
+    },
+    "extra": { "eas": { "projectId": "" } }
+  }
+}

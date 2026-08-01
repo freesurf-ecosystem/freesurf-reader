@@ -1,0 +1,10 @@
+name = "freesurf-natural-reader"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Secrets to set via `wrangler secret put`:
+#   RUNPOD_API_KEY     — your RunPod API key
+#   RUNPOD_ENDPOINT_ID — the Kokoro serverless endpoint ID
