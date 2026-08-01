@@ -6,7 +6,7 @@ Paste or import any text, choose from 20 natural voices across 9 languages, and 
 
 ## Why it's free
 
-The reader uses [Kokoro TTS](https://github.com/remsky/Kokoro-FastAPI), a self-hosted AI model running on our own GPU infrastructure. No per-request API fees to third-party providers. The app is supported by minimal, non-intrusive ads. No subscription ever.
+The reader uses [Kokoro TTS](https://github.com/remsky/Kokoro-FastAPI), a self-hosted AI model running on our own GPU infrastructure. No per-request API fees to third-party providers. The app is supported by minimal, non-intrusive ads. Premium removes ads.
 
 ## Privacy
 
