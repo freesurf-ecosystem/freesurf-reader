@@ -15,6 +15,9 @@
     },
     "ios": {
       "bundleIdentifier": "tools.freesurf.reader",
+      "infoPlist": {
+        "NSUserTrackingUsageDescription": "Your device identifier is used to serve personalized ads and keep FreeSurf free."
+      },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
           {

@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
 import { supabase } from "./lib/supabase";
 import ConsentScreen from "./screens/ConsentScreen";
 import ReaderScreen from "./screens/ReaderScreen";
@@ -28,6 +29,10 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => setSession(Boolean(data.session)));
     const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(Boolean(s)));
     return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    requestTrackingPermissionsAsync().catch(() => {});
   }, []);
 
   useEffect(() => {
