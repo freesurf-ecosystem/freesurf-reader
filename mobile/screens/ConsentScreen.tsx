@@ -26,9 +26,10 @@ export default function ConsentScreen({ navigation }: Props) {
         <View style={styles.divider} />
 
         <Text style={styles.body}>
-          This app converts text to speech using AI voice models. When you tap
-          "Read Aloud", the text you provide is sent to our secure AI servers to
-          generate audio.
+          This app converts text to speech using AI voice models running on our
+          own servers. Your text is never sent to third-party AI companies. When
+          you tap "Read Aloud", the text is processed in real-time and audio is
+          returned immediately.
         </Text>
 
         <View style={styles.bullets}>
