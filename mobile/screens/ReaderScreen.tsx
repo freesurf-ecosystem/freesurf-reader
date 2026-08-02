@@ -1,25 +1,20 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-  Modal,
-  FlatList,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Modal, FlatList,
 } from "react-native";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import * as DocumentPicker from "expo-document-picker";
 import * as Sharing from "expo-sharing";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import { textToSpeech, extractPdfText, VOICES, type Voice } from "../lib/tts";
+import { supabase } from "../lib/supabase";
+import TopBar from "../components/TopBar";
 
-type Props = NativeStackScreenProps<RootStackParamList, "Reader">;
+type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; isLoggedIn: boolean };
+
+export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
 const HISTORY_KEY = "freesurf-reader-history";
 
@@ -58,7 +53,7 @@ const sanitizeFileName = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "recording";
 
-export default function ReaderScreen({ navigation }: Props) {
+export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [selectedVoice, setSelectedVoice] = useState<Voice>(VOICES[0]);
@@ -367,16 +362,13 @@ export default function ReaderScreen({ navigation }: Props) {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.brand}>FreeSurf</Text>
-        <Text style={styles.headerTitle}>Natural Reader</Text>
-        <TouchableOpacity
-          style={styles.historyBtn}
-          onPress={() => navigation.navigate("History")}
-        >
-          <Text style={styles.historyBtnText}>
-            Saved {historyCount > 0 ? `(${historyCount})` : ""}
-          </Text>
-        </TouchableOpacity>
+        <TopBar
+          appName="FreeSurf Reader"
+          isLoggedIn={isLoggedIn}
+          onSignIn={() => navigation.navigate("Auth")}
+          onSignOut={async () => { await supabase.auth.signOut(); }}
+          menuItems={[{ label: `Saved ${historyCount > 0 ? `(${historyCount})` : ""}`, onPress: () => navigation.navigate("History") }]}
+        />
       </View>
 
       <ScrollView
