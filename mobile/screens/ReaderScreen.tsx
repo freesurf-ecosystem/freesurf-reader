@@ -160,7 +160,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
     try {
       const audioBase64 = await textToSpeech(content, selectedVoice.voice, speed);
 
-      const fileName = `reader-${Date.now()}.mp3`;
+      const fileName = `reader-${Date.now()}.wav`;
       const uri = FileSystem.documentDirectory + fileName;
       await FileSystem.writeAsStringAsync(uri, audioBase64, {
         encoding: FileSystem.EncodingType.Base64,
@@ -313,7 +313,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
     if (oldStem !== newStem && oldUri) {
       const dir = oldUri.substring(0, oldUri.lastIndexOf("/") + 1);
-      const newUri = `${dir}${newStem}-${Date.now()}.mp3`;
+      const newUri = `${dir}${newStem}-${Date.now()}.wav`;
       try {
         const info = await FileSystem.getInfoAsync(oldUri);
         if (info.exists) {
@@ -338,7 +338,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   async function handleShare(uri: string) {
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
-      await Sharing.shareAsync(uri, { mimeType: "audio/mpeg" });
+      await Sharing.shareAsync(uri, { mimeType: "audio/wav" });
     }
   }
 
