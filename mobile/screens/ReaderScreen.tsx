@@ -14,8 +14,6 @@ import TopBar from "../components/TopBar";
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; isLoggedIn: boolean };
 
-export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
-
 const HISTORY_KEY = "freesurf-reader-history";
 
 interface Recording {
@@ -55,6 +53,8 @@ const sanitizeFileName = (value: string) =>
 
 export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   const [text, setText] = useState("");
+
+  const handleSignOut = async () => { await supabase.auth.signOut(); };
   const [title, setTitle] = useState("");
   const [selectedVoice, setSelectedVoice] = useState<Voice>(VOICES[0]);
   const [speed, setSpeed] = useState(1.0);
@@ -366,7 +366,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
           appName="FreeSurf Reader"
           isLoggedIn={isLoggedIn}
           onSignIn={() => navigation.navigate("Auth")}
-          onSignOut={async () => { await supabase.auth.signOut(); }}
+          onSignOut={handleSignOut}
           menuItems={[{ label: `Saved ${historyCount > 0 ? `(${historyCount})` : ""}`, onPress: () => navigation.navigate("History") }]}
         />
       </View>
