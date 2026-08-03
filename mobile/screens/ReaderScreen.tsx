@@ -120,16 +120,14 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} keyboardShouldPersistTaps="always">
-        <View style={styles.editorCard}>
-          <TextInput style={styles.titleInput} placeholder="Document title" placeholderTextColor="#5f6b7a"
-            value={title} onChangeText={setTitle} />
-          <TextInput style={[styles.textInput, { minHeight: inputHeight, height: inputHeight }]}
-            placeholder="Paste an article, study guide, or document text here..."
-            placeholderTextColor="#5f6b7a" value={text} onChangeText={setText}
-            multiline scrollEnabled={false} textAlignVertical="top"
-            onContentSizeChange={(e) => setInputHeight(Math.max(MIN_INPUT_HEIGHT, e.nativeEvent.contentSize.height + 24))}
-          />
-        </View>
+        <TextInput style={styles.titleInput} placeholder="Document title" placeholderTextColor="#5f6b7a"
+          value={title} onChangeText={setTitle} />
+        <TextInput style={[styles.textInput, { minHeight: inputHeight, height: inputHeight }]}
+          placeholder="Paste an article, study guide, or document text here..."
+          placeholderTextColor="#5f6b7a" value={text} onChangeText={setText}
+          multiline scrollEnabled={false} textAlignVertical="top"
+          onContentSizeChange={(e) => setInputHeight(Math.max(MIN_INPUT_HEIGHT, e.nativeEvent.contentSize.height + 24))}
+        />
       </ScrollView>
 
       <View style={styles.readerBar}>
@@ -186,14 +184,11 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   bodyContent: { padding: 20, paddingBottom: 24 },
 
-  editorCard: {
-    backgroundColor: "#111937", borderRadius: 18, padding: 16, borderWidth: 1, borderColor: "#2a3568",
-  },
   titleInput: {
-    fontSize: 20, fontWeight: "600", color: "#e8ecff", paddingBottom: 12, marginBottom: 8,
+    fontSize: 20, fontWeight: "600", color: "#e8ecff", paddingBottom: 12, marginBottom: 12,
     borderBottomWidth: 1, borderBottomColor: "#2a3568",
   },
-  textInput: { fontSize: 16, lineHeight: 24, color: "#e8ecff" },
+  textInput: { fontSize: 16, lineHeight: 26, color: "#e8ecff" },
 
   readerBar: { backgroundColor: "#111937", borderTopWidth: 1, borderTopColor: "#2a3568", paddingBottom: 36 },
   toast: { backgroundColor: "#0d6b61", paddingVertical: 8, paddingHorizontal: 16, alignItems: "center" },
