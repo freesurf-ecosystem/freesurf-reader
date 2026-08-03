@@ -59,7 +59,11 @@ export async function textToSpeech(
 
   const data = await res.json();
   if (!res.ok || data.error) {
-    throw new Error(data.error || "TTS request failed");
+    throw new Error(data.error || `TTS request failed (${res.status})`);
+  }
+
+  if (!data.audio_base64) {
+    throw new Error("TTS response missing audio_base64");
   }
 
   return data.audio_base64;
