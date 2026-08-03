@@ -163,7 +163,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       const fileName = `reader-${Date.now()}.wav`;
       const uri = FileSystem.documentDirectory + fileName;
       await FileSystem.writeAsStringAsync(uri, audioBase64, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: "base64" as FileSystem.EncodingType,
       });
 
       currentUriRef.current = uri;
@@ -266,7 +266,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       } else {
         // PDF — send to worker for text extraction
         const pdfBase64 = await FileSystem.readAsStringAsync(file.uri, {
-          encoding: FileSystem.EncodingType.Base64,
+          encoding: "base64" as FileSystem.EncodingType,
         });
         const extractedText = await extractPdfText(pdfBase64);
         setText(extractedText);
