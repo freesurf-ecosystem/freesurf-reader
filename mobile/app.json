@@ -7,8 +7,12 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "freesurf-reader",
-    "splash": { "backgroundColor": "#0b1020" },
-    "assetBundlePatterns": ["**/*"],
+    "splash": {
+      "backgroundColor": "#0b1020"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "tools.freesurf.reader",
       "versionCode": 1
@@ -22,15 +26,23 @@
         "NSPrivacyAccessedAPITypes": [
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
-            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
           },
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
-            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+            "NSPrivacyAccessedAPITypeReasons": [
+              "C617.1"
+            ]
           }
         ]
       }
     },
-    "extra": { "eas": { "projectId": "" } }
+    "extra": {
+      "eas": {
+        "projectId": "728b0762-2d4f-4708-bd41-72cbe28e7f17"
+      }
+    }
   }
 }
