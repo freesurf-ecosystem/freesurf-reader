@@ -15,7 +15,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 
-const HISTORY_KEY = "freesurf-reader-history";
+const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
 
 interface Recording {
   id: string;
@@ -55,7 +55,7 @@ export default function HistoryScreen({ navigation }: Props) {
   async function loadHistory() {
     try {
       const raw = await FileSystem.readAsStringAsync(
-        FileSystem.documentDirectory + HISTORY_KEY,
+        HISTORY_PATH,
         { encoding: FileSystem.EncodingType.Utf8 }
       ).catch(() => "[]");
       setRecordings(JSON.parse(raw));
@@ -64,7 +64,7 @@ export default function HistoryScreen({ navigation }: Props) {
 
   async function persistHistory(updated: Recording[]) {
     await FileSystem.writeAsStringAsync(
-      FileSystem.documentDirectory + HISTORY_KEY,
+      HISTORY_PATH,
       JSON.stringify(updated),
       { encoding: FileSystem.EncodingType.Utf8 }
     );
