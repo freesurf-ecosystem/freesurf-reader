@@ -1,738 +1,223 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Modal, FlatList,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
+  ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { Audio } from "expo-av";
-import * as FileSystem from "expo-file-system/legacy";
+import * as FileSystem from "expo-file-system/src/legacy";
 import * as DocumentPicker from "expo-document-picker";
 import * as Sharing from "expo-sharing";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
-import { textToSpeech, extractPdfText, VOICES, type Voice } from "../lib/tts";
+import { textToSpeech, VOICES, type Voice } from "../lib/tts";
 import { supabase } from "../lib/supabase";
 import TopBar from "../components/TopBar";
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; isLoggedIn: boolean };
 
-const HISTORY_KEY = "freesurf-reader-history";
+const MIN_INPUT_HEIGHT = 280;
+const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 
-interface Recording {
-  id: string;
-  title: string;
-  text: string;
-  voice: string;
-  uri: string;
-  createdAt: number;
+async function ensureDir() {
+  const info = await FileSystem.getInfoAsync(AUDIO_DIR);
+  if (!info.exists) await FileSystem.makeDirectoryAsync(AUDIO_DIR, { intermediates: true });
 }
-
-const VOICE_GROUPS: { label: string; voices: Voice[] }[] = [
-  { label: "English (US)", voices: VOICES.filter((v) => v.language === "en-us") },
-  { label: "English (UK)", voices: VOICES.filter((v) => v.language === "en-gb") },
-  { label: "Spanish", voices: VOICES.filter((v) => v.language === "es") },
-  { label: "French", voices: VOICES.filter((v) => v.language === "fr") },
-  { label: "Italian", voices: VOICES.filter((v) => v.language === "it") },
-  { label: "Portuguese", voices: VOICES.filter((v) => v.language === "pt") },
-  { label: "German", voices: VOICES.filter((v) => v.language === "de") },
-  { label: "Hindi", voices: VOICES.filter((v) => v.language === "hi") },
-  { label: "Polish", voices: VOICES.filter((v) => v.language === "pl") },
-];
-
-function formatTime(ms: number): string {
-  const totalSec = Math.max(0, Math.floor(ms / 1000));
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${min}:${String(sec).padStart(2, "0")}`;
-}
-
-const sanitizeFileName = (value: string) =>
-  String(value || "recording")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "recording";
 
 export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   const [text, setText] = useState("");
-
-  const handleSignOut = async () => { await supabase.auth.signOut(); };
   const [title, setTitle] = useState("");
   const [selectedVoice, setSelectedVoice] = useState<Voice>(VOICES[0]);
-  const [speed, setSpeed] = useState(1.0);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [showVoicePicker, setShowVoicePicker] = useState(false);
+  const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
+  const [savedToast, setSavedToast] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
-  const [positionMs, setPositionMs] = useState(0);
-  const [durationMs, setDurationMs] = useState(0);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
 
   const soundRef = useRef<Audio.Sound | null>(null);
-  const currentUriRef = useRef<string | null>(null);
-  const seekingRef = useRef(false);
-  const seekTrackWidthRef = useRef(0);
-  const positionUpdaterRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const uriRef = useRef<string | null>(null);
+
+  const handleSignOut = async () => { await supabase.auth.signOut(); };
 
   useEffect(() => {
-    loadHistoryCount();
-    return () => {
-      if (positionUpdaterRef.current) clearInterval(positionUpdaterRef.current);
-    };
+    ensureDir().then(() => {
+      FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j =>
+        setHistoryCount(JSON.parse(j).length)
+      ).catch(() => {});
+    });
   }, []);
 
-  async function loadHistoryCount() {
-    try {
-      const raw = await FileSystem.readAsStringAsync(
-        FileSystem.documentDirectory + HISTORY_KEY,
-        { encoding: FileSystem.EncodingType.Utf8 }
-      ).catch(() => "[]");
-      const history: Recording[] = JSON.parse(raw);
-      setHistoryCount(history.length);
-    } catch {}
-  }
-
-  async function loadHistory(): Promise<Recording[]> {
-    try {
-      const raw = await FileSystem.readAsStringAsync(
-        FileSystem.documentDirectory + HISTORY_KEY,
-        { encoding: FileSystem.EncodingType.Utf8 }
-      ).catch(() => "[]");
-      return JSON.parse(raw);
-    } catch {
-      return [];
-    }
-  }
-
-  async function saveHistory(history: Recording[]) {
-    const trimmed = history.slice(0, 50);
-    await FileSystem.writeAsStringAsync(
-      FileSystem.documentDirectory + HISTORY_KEY,
-      JSON.stringify(trimmed),
-      { encoding: FileSystem.EncodingType.Utf8 }
-    );
-    setHistoryCount(trimmed.length);
-  }
-
-  function startPositionTracking() {
-    if (positionUpdaterRef.current) clearInterval(positionUpdaterRef.current);
-    positionUpdaterRef.current = setInterval(async () => {
-      if (seekingRef.current || !soundRef.current) return;
-      try {
-        const status = await soundRef.current.getStatusAsync();
-        if (status.isLoaded) {
-          setPositionMs(Number(status.positionMillis || 0));
-          setDurationMs(Number(status.durationMillis || 0));
-        }
-      } catch {}
-    }, 250);
-  }
-
-  function stopPositionTracking() {
-    if (positionUpdaterRef.current) {
-      clearInterval(positionUpdaterRef.current);
-      positionUpdaterRef.current = null;
-    }
-  }
-
-  const stopPlayback = useCallback(async () => {
-    stopPositionTracking();
-    try {
-      await soundRef.current?.stopAsync();
-      await soundRef.current?.unloadAsync();
-    } catch {}
-    soundRef.current = null;
-    setIsPlaying(false);
-    setPositionMs(0);
-    setDurationMs(0);
-  }, []);
+  const timeEstimate = useMemo(() => {
+    const len = (text || "").trim().length;
+    if (!len) return null;
+    const sec = Math.ceil(len * 3 / 1000) + 15;
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return m > 0 ? `~${m}m ${s}s` : `~${s}s`;
+  }, [text]);
 
   async function handleRead() {
     const content = text.trim();
-    if (!content) {
-      Alert.alert("No text", "Paste or type something to read aloud.");
-      return;
-    }
+    if (!content) return;
+    if (isPlaying || isGenerating) { await stopPlayback(); return; }
 
-    await stopPlayback();
     setIsGenerating(true);
-
     try {
-      const audioBase64 = await textToSpeech(content, selectedVoice.voice, speed);
+      const b64 = await textToSpeech(content, selectedVoice.voice);
+      await ensureDir();
+      const fname = `reader-${Date.now()}.wav`;
+      const uri = AUDIO_DIR + fname;
+      await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
 
-      const fileName = `reader-${Date.now()}.wav`;
-      const uri = FileSystem.documentDirectory + fileName;
-      await FileSystem.writeAsStringAsync(uri, audioBase64, {
-        encoding: FileSystem.EncodingType.Base64,
+      uriRef.current = uri;
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
+      const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true }, (status) => {
+        if (status.isLoaded && status.didJustFinish) { setIsPlaying(false); sound.unloadAsync().catch(() => {}); }
       });
-
-      currentUriRef.current = uri;
-
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-      });
-
-      seekingRef.current = false;
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: true },
-        (status) => {
-          if (!status.isLoaded) return;
-          if (status.didJustFinish) {
-            setIsPlaying(false);
-            setPositionMs(0);
-            setDurationMs(Number(status.durationMillis || 0));
-            stopPositionTracking();
-            sound.unloadAsync().catch(() => {});
-          }
-        }
-      );
-
       soundRef.current = sound;
-      setIsGenerating(false);
       setIsPlaying(true);
+      setIsGenerating(false);
 
-      const initialStatus = await sound.getStatusAsync();
-      if (initialStatus.isLoaded) {
-        setDurationMs(Number(initialStatus.durationMillis || 0));
-        setPositionMs(0);
-      }
-      startPositionTracking();
-
-      await saveToHistory({
-        id: Date.now().toString(),
-        title: title.trim() || content.slice(0, 50),
-        text: content,
-        voice: selectedVoice.label,
-        uri,
-        createdAt: Date.now(),
-      });
+      const hist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
+      hist.unshift({ title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri, createdAt: Date.now() });
+      await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(hist.slice(0, 50)));
+      setHistoryCount(Math.min(hist.length, 50));
+      setSavedToast(true);
+      setTimeout(() => setSavedToast(false), 3000);
     } catch (e: any) {
       setIsGenerating(false);
       Alert.alert("Error", e.message || "Failed to generate audio.");
     }
   }
 
-  async function handleStop() {
-    await stopPlayback();
-  }
-
-  async function handleSeek(locationX: number) {
-    if (!soundRef.current || !durationMs) return;
-    const ratio = Math.max(0, Math.min(1, locationX / seekTrackWidthRef.current));
-    const ms = Math.round(durationMs * ratio);
-    seekingRef.current = true;
-    try {
-      await soundRef.current.setPositionAsync(ms);
-      setPositionMs(ms);
-    } catch {}
-    seekingRef.current = false;
-  }
-
-  async function handleJump(ms: number) {
-    if (!soundRef.current) return;
-    const newPos = Math.max(0, Math.min(durationMs, positionMs + ms));
-    seekingRef.current = true;
-    try {
-      await soundRef.current.setPositionAsync(newPos);
-      setPositionMs(newPos);
-    } catch {}
-    seekingRef.current = false;
+  async function stopPlayback() {
+    try { await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync(); } catch {}
+    soundRef.current = null; setIsPlaying(false);
   }
 
   async function handleImport() {
     setIsImporting(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["text/plain", "application/pdf"],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (result.canceled || !result.assets?.[0]) {
-        setIsImporting(false);
-        return;
-      }
-
-      const file = result.assets[0];
-      setTitle(file.name);
-
-      if (file.name?.endsWith(".txt") || file.mimeType === "text/plain") {
-        const content = await FileSystem.readAsStringAsync(file.uri, {
-          encoding: FileSystem.EncodingType.Utf8,
-        });
-        setText(content);
-      } else {
-        // PDF — send to worker for text extraction
-        const pdfBase64 = await FileSystem.readAsStringAsync(file.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const extractedText = await extractPdfText(pdfBase64);
-        setText(extractedText);
-      }
+      const r = await DocumentPicker.getDocumentAsync({ type: ["text/plain"], copyToCacheDirectory: true });
+      if (r.canceled || !r.assets?.[0]) { setIsImporting(false); return; }
+      const f = r.assets[0];
+      setTitle(f.name || "");
+      const content = await FileSystem.readAsStringAsync(f.uri, { encoding: FileSystem.EncodingType.Utf8 });
+      setText(content);
     } catch (e: any) {
-      if (e.message?.includes("extraction failed") || e.message?.includes("PDF")) {
-        Alert.alert(
-          "PDF Import",
-          "PDF text extraction requires the worker to be deployed with PDF support. For now, import a .txt file instead.",
-          [{ text: "OK" }]
-        );
-      } else if (!String(e).includes("canceled")) {
-        Alert.alert("Import failed", e.message || "Could not import file.");
-      }
-    } finally {
-      setIsImporting(false);
+      if (!String(e).includes("canceled")) Alert.alert("Import failed", e.message);
     }
+    setIsImporting(false);
   }
-
-  async function handleRenameStart(recordingId: string, currentTitle: string) {
-    setEditingId(recordingId);
-    setEditingTitle(currentTitle);
-  }
-
-  async function handleRenameSave() {
-    if (!editingId || !editingTitle.trim()) {
-      setEditingId(null);
-      setEditingTitle("");
-      return;
-    }
-
-    const history = await loadHistory();
-    const entry = history.find((r) => r.id === editingId);
-    if (!entry) {
-      setEditingId(null);
-      setEditingTitle("");
-      return;
-    }
-
-    const newTitle = editingTitle.trim();
-    const oldStem = sanitizeFileName(entry.title);
-    const newStem = sanitizeFileName(newTitle);
-    const oldUri = entry.uri;
-
-    if (oldStem !== newStem && oldUri) {
-      const dir = oldUri.substring(0, oldUri.lastIndexOf("/") + 1);
-      const newUri = `${dir}${newStem}-${Date.now()}.wav`;
-      try {
-        const info = await FileSystem.getInfoAsync(oldUri);
-        if (info.exists) {
-          await FileSystem.moveAsync({ from: oldUri, to: newUri });
-        }
-        entry.uri = newUri;
-      } catch {}
-    }
-
-    entry.title = newTitle;
-    const updated = history.map((r) => (r.id === editingId ? entry : r));
-    await saveHistory(updated);
-
-    if (currentUriRef.current === oldUri) {
-      currentUriRef.current = entry.uri;
-    }
-
-    setEditingId(null);
-    setEditingTitle("");
-  }
-
-  async function handleShare(uri: string) {
-    const canShare = await Sharing.isAvailableAsync();
-    if (canShare) {
-      await Sharing.shareAsync(uri, { mimeType: "audio/wav" });
-    }
-  }
-
-  async function saveToHistory(recording: Recording) {
-    const history = await loadHistory();
-    history.unshift(recording);
-    await saveHistory(history);
-  }
-
-  const progressRatio = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
-
-  // Estimated time
-  const estSeconds = Math.ceil((text.trim().length || 0) * 3 / 1000) + 30;
-  const estMins = Math.floor(estSeconds / 60);
-  const estSecs = estSeconds % 60;
-  const timeEstimate = text.trim()
-    ? `~${estMins > 0 ? `${estMins}m ` : ""}${estSecs}s`
-    : "";
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={styles.header}>
-        <TopBar
-          appName="FreeSurf Reader"
-          isLoggedIn={isLoggedIn}
-          onSignIn={() => navigation.navigate("Auth")}
+        <TopBar appName="FreeSurf Reader" isLoggedIn={isLoggedIn} onSignIn={() => navigation.navigate("Auth")}
           onSignOut={handleSignOut}
-          menuItems={[{ label: `Saved ${historyCount > 0 ? `(${historyCount})` : ""}`, onPress: () => navigation.navigate("History") }]}
+          menuItems={[{ label: `Saved (${historyCount})`, onPress: () => navigation.navigate("History") }]}
         />
       </View>
 
-      <ScrollView
-        style={styles.body}
-        contentContainerStyle={styles.bodyContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Title */}
-        <TextInput
-          style={styles.titleInput}
-          placeholder="Title (optional)"
-          placeholderTextColor="#5f6b7a"
-          value={title}
-          onChangeText={setTitle}
-        />
-
-        {/* Text area */}
-        <TextInput
-          style={styles.textInput}
-          placeholder="Paste or type text to read aloud..."
-          placeholderTextColor="#5f6b7a"
-          value={text}
-          onChangeText={setText}
-          multiline
-          textAlignVertical="top"
-        />
-
-        {/* Controls row */}
-        <View style={styles.controls}>
-          {/* Voice picker */}
-          <TouchableOpacity
-            style={styles.controlBtn}
-            onPress={() => setShowVoicePicker(true)}
-          >
-            <Text style={styles.controlLabel}>🎙 {selectedVoice.label}</Text>
-          </TouchableOpacity>
-
-          {/* Speed */}
-          <TouchableOpacity
-            style={styles.controlBtn}
-            onPress={() => {
-              const speeds = [0.75, 1.0, 1.25, 1.5];
-              const idx = speeds.indexOf(speed);
-              setSpeed(speeds[(idx + 1) % speeds.length]);
-            }}
-          >
-            <Text style={styles.controlLabel}>⚡ {speed}x</Text>
-          </TouchableOpacity>
-
-          {/* Import */}
-          <TouchableOpacity style={styles.controlBtn} onPress={handleImport} disabled={isImporting}>
-            {isImporting ? (
-              <ActivityIndicator color="#b3bddf" size="small" />
-            ) : (
-              <Text style={styles.controlLabel}>📄 Import</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Time estimate */}
-          {timeEstimate ? (
-            <Text style={styles.estimate}>{timeEstimate}</Text>
-          ) : null}
+      <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} keyboardShouldPersistTaps="always">
+        <View style={styles.editorCard}>
+          <TextInput style={styles.titleInput} placeholder="Document title" placeholderTextColor="#5f6b7a"
+            value={title} onChangeText={setTitle} />
+          <TextInput style={[styles.textInput, { minHeight: inputHeight, height: inputHeight }]}
+            placeholder="Paste an article, study guide, or document text here..."
+            placeholderTextColor="#5f6b7a" value={text} onChangeText={setText}
+            multiline scrollEnabled={false} textAlignVertical="top"
+            onContentSizeChange={(e) => setInputHeight(Math.max(MIN_INPUT_HEIGHT, e.nativeEvent.contentSize.height + 24))}
+          />
         </View>
-
-        {/* Playback progress (shown when playing) */}
-        {isPlaying && durationMs > 0 ? (
-          <View style={styles.progressSection}>
-            <TouchableOpacity
-              style={styles.seekTrack}
-              activeOpacity={0.9}
-              onLayout={(e) => { seekTrackWidthRef.current = e.nativeEvent.layout.width; }}
-              onPress={(e) => handleSeek(e.nativeEvent.locationX)}
-            >
-              <View
-                style={[styles.seekFill, { width: `${progressRatio * 100}%` as any }]}
-              />
-            </TouchableOpacity>
-
-            <View style={styles.timeRow}>
-              <Text style={styles.timeText}>{formatTime(positionMs)}</Text>
-              <Text style={styles.timeText}>{formatTime(durationMs)}</Text>
-            </View>
-
-            <View style={styles.jumpRow}>
-              <TouchableOpacity style={styles.jumpBtn} onPress={() => handleJump(-15000)}>
-                <Text style={styles.jumpText}>-15s</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.jumpBtn} onPress={() => setPositionMs(0).then(() => handleSeek(0))}>
-                <Text style={styles.jumpText}>Restart</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.jumpBtn} onPress={() => handleJump(15000)}>
-                <Text style={styles.jumpText}>+15s</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : null}
       </ScrollView>
 
-      {/* Play/Stop button */}
-      <View style={styles.bottomBar}>
-        {(isGenerating || isPlaying) ? (
-          <TouchableOpacity
-            style={[styles.playBtn, styles.stopBtn]}
-            onPress={handleStop}
-          >
-            {isGenerating ? (
-              <ActivityIndicator color="#fff" style={{ marginRight: 8 }} />
+      <View style={styles.readerBar}>
+        {savedToast && <View style={styles.toast}><Text style={styles.toastText}>✓ Saved to Recordings</Text></View>}
+
+        <View style={styles.barRow}>
+          <TouchableOpacity style={styles.barBtn} onPress={handleImport} disabled={isImporting}>
+            <Text style={styles.barBtnText}>{isImporting ? "Importing..." : "📄 Import"}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.barRight}>
+            {timeEstimate && !isGenerating && !isPlaying ? (
+              <Text style={styles.estimate}>{timeEstimate}</Text>
             ) : null}
-            <Text style={styles.playBtnText}>
-              {isGenerating ? "Generating..." : "Stop"}
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.playBtn, !text.trim() && styles.playBtnDisabled]}
-            onPress={handleRead}
-            disabled={!text.trim() || isImporting}
-          >
-            <Text style={styles.playBtnText}>Read Aloud</Text>
-          </TouchableOpacity>
-        )}
-      </View>
 
-      {/* Voice picker modal */}
-      <Modal
-        visible={showVoicePicker}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowVoicePicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose a voice</Text>
-              <TouchableOpacity onPress={() => setShowVoicePicker(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={[styles.playBtn, (isPlaying || isGenerating) && styles.playBtnActive]}
+              onPress={handleRead}>
+              <Text style={[styles.playBtnText, (isPlaying || isGenerating) && styles.playBtnTextActive]}>
+                {isGenerating ? `Preparing${timeEstimate ? ` ${timeEstimate}` : ""}` : isPlaying ? "Stop" : "Read Aloud"}
+              </Text>
+            </TouchableOpacity>
 
-            <FlatList
-              data={VOICE_GROUPS}
-              keyExtractor={(g) => g.label}
-              renderItem={({ item: group }) => (
-                <View style={styles.voiceGroup}>
-                  <Text style={styles.voiceGroupLabel}>{group.label}</Text>
-                  {group.voices.map((v) => (
-                    <TouchableOpacity
-                      key={v.id}
-                      style={[
-                        styles.voiceItem,
-                        selectedVoice.id === v.id && styles.voiceItemActive,
-                      ]}
-                      onPress={() => {
-                        setSelectedVoice(v);
-                        setShowVoicePicker(false);
-                      }}
-                    >
-                      <Text style={styles.voiceItemLabel}>
-                        {selectedVoice.id === v.id ? "● " : "  "}{v.label}
-                      </Text>
-                      <Text style={styles.voiceItemDesc}>{v.description}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            />
+            <TouchableOpacity style={styles.voiceChip} onPress={() => setShowVoicePicker(true)}>
+              <Text style={styles.voiceChipText}>{selectedVoice.label}</Text>
+            </TouchableOpacity>
           </View>
         </View>
+      </View>
+
+      <Modal visible={showVoicePicker} transparent animationType="slide" onRequestClose={() => setShowVoicePicker(false)}>
+        <TouchableOpacity style={styles.backdrop} onPress={() => setShowVoicePicker(false)} activeOpacity={1}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Choose voice</Text>
+            <ScrollView style={{ maxHeight: 420 }} bounces={false}>
+              {VOICES.map(v => (
+                <TouchableOpacity key={v.id} style={[styles.voiceOption, selectedVoice.id === v.id && styles.voiceSelected]}
+                  onPress={() => { setSelectedVoice(v); setShowVoicePicker(false); }}>
+                  <Text style={styles.voiceLabel}>{selectedVoice.id === v.id ? "● " : "  "}{v.label}</Text>
+                  <Text style={styles.voiceDesc}>{v.description}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0b1020" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    paddingTop: 56,
-    backgroundColor: "#111937",
-    borderBottomWidth: 1,
-    borderBottomColor: "#2a3568",
-    gap: 12,
-  },
-  brand: { fontSize: 13, fontWeight: "600", color: "#5b8cff" },
-  headerTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#e8ecff",
-  },
-  historyBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#1e2a4a",
-  },
-  historyBtnText: { color: "#b3bddf", fontSize: 13, fontWeight: "500" },
+  root: { flex: 1, backgroundColor: "#0b1020" },
+  header: { paddingTop: 56, backgroundColor: "#111937", borderBottomWidth: 1, borderBottomColor: "#2a3568" },
 
   body: { flex: 1 },
-  bodyContent: { padding: 20, paddingBottom: 100 },
+  bodyContent: { padding: 20, paddingBottom: 24 },
 
+  editorCard: {
+    backgroundColor: "#111937", borderRadius: 18, padding: 16, borderWidth: 1, borderColor: "#2a3568",
+  },
   titleInput: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#e8ecff",
-    marginBottom: 16,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#2a3568",
+    fontSize: 20, fontWeight: "600", color: "#e8ecff", paddingBottom: 12, marginBottom: 8,
+    borderBottomWidth: 1, borderBottomColor: "#2a3568",
   },
-  textInput: {
-    flex: 1,
-    minHeight: 250,
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#e8ecff",
-    backgroundColor: "#111937",
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#2a3568",
-  },
+  textInput: { fontSize: 16, lineHeight: 24, color: "#e8ecff" },
 
-  controls: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    marginTop: 20,
-    gap: 10,
-  },
-  controlBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#111937",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#2a3568",
-  },
-  controlLabel: { color: "#e8ecff", fontSize: 14, fontWeight: "500" },
-  estimate: {
-    color: "#5f6b7a",
-    fontSize: 13,
-    marginLeft: "auto",
-  },
-
-  // Progress section
-  progressSection: {
-    marginTop: 20,
-    backgroundColor: "#111937",
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#2a3568",
-    gap: 10,
-  },
-  seekTrack: {
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: "#1e2a4a",
-    overflow: "hidden",
-    justifyContent: "center",
-  },
-  seekFill: {
-    height: "100%",
-    backgroundColor: "#5b8cff",
-    borderRadius: 999,
-  },
-  timeRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  timeText: {
-    color: "#5f6b7a",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  jumpRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  jumpBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "#1e2a4a",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#2a3568",
-  },
-  jumpText: {
-    color: "#b3bddf",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  bottomBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    paddingBottom: 36,
-    backgroundColor: "#111937",
-    borderTopWidth: 1,
-    borderTopColor: "#2a3568",
-  },
+  readerBar: { backgroundColor: "#111937", borderTopWidth: 1, borderTopColor: "#2a3568", paddingBottom: 36 },
+  toast: { backgroundColor: "#0d6b61", paddingVertical: 8, paddingHorizontal: 16, alignItems: "center" },
+  toastText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  barRow: { minHeight: 56, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 4 },
+  barBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
+  barBtnText: { color: "#e8ecff", fontSize: 13, fontWeight: "600" },
+  barRight: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 8 },
+  estimate: { color: "#5f6b7a", fontSize: 12, fontWeight: "600" },
   playBtn: {
-    backgroundColor: "#5b8cff",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
+    flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 9,
+    borderRadius: 22, backgroundColor: "#e8ecff15",
   },
-  playBtnDisabled: { opacity: 0.4 },
-  stopBtn: { backgroundColor: "#ef4444" },
-  playBtnText: { color: "#fff", fontSize: 17, fontWeight: "700" },
+  playBtnActive: { backgroundColor: "#e8ecff" },
+  playBtnText: { color: "#e8ecff", fontSize: 14, fontWeight: "700" },
+  playBtnTextActive: { color: "#0b1020", fontSize: 14, fontWeight: "700" },
+  voiceChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: "#2a3568" },
+  voiceChipText: { color: "#e8ecff", fontSize: 12, fontWeight: "600" },
 
-  // Voice picker modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#111937",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
-    paddingBottom: 36,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#2a3568",
-  },
-  modalTitle: { fontSize: 18, fontWeight: "700", color: "#e8ecff" },
-  modalClose: { fontSize: 20, color: "#b3bddf", padding: 4 },
-  voiceGroup: { paddingHorizontal: 20, marginTop: 16 },
-  voiceGroupLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#5b8cff",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  voiceItem: {
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: "#0b1433",
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  voiceItemActive: { borderColor: "#5b8cff", backgroundColor: "#151f44" },
-  voiceItemLabel: { fontSize: 15, fontWeight: "600", color: "#e8ecff" },
-  voiceItemDesc: { fontSize: 12, color: "#5f6b7a", marginTop: 2 },
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  sheet: { backgroundColor: "#111937", borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 56 },
+  sheetTitle: { color: "#e8ecff", fontSize: 16, fontWeight: "700", padding: 16, borderBottomWidth: 1, borderBottomColor: "#2a3568" },
+  voiceOption: { paddingVertical: 14, paddingHorizontal: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#2a3568" },
+  voiceSelected: { backgroundColor: "#e8ecff10" },
+  voiceLabel: { color: "#e8ecff", fontSize: 15 },
+  voiceDesc: { color: "#5f6b7a", fontSize: 12, marginTop: 2 },
 });
