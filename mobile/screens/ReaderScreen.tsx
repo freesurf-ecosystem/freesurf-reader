@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Modal, FlatList,
 } from "react-native";
 import { Audio } from "expo-av";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as DocumentPicker from "expo-document-picker";
 import * as Sharing from "expo-sharing";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -163,7 +163,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       const fileName = `reader-${Date.now()}.wav`;
       const uri = FileSystem.documentDirectory + fileName;
       await FileSystem.writeAsStringAsync(uri, audioBase64, {
-        encoding: "base64" as FileSystem.EncodingType,
+        encoding: FileSystem.EncodingType.Base64,
       });
 
       currentUriRef.current = uri;
@@ -266,7 +266,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       } else {
         // PDF — send to worker for text extraction
         const pdfBase64 = await FileSystem.readAsStringAsync(file.uri, {
-          encoding: "base64" as FileSystem.EncodingType,
+          encoding: FileSystem.EncodingType.Base64,
         });
         const extractedText = await extractPdfText(pdfBase64);
         setText(extractedText);
