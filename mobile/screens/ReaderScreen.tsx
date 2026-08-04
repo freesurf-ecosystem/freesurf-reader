@@ -116,7 +116,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       // Save entry immediately so it's visible in Recordings
       const hist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
       const entryId = `${batchId}-${uris.length}`;
-      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, createdAt: Date.now() });
+      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, uris, createdAt: Date.now() });
       await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(hist.slice(0, 50)));
       setHistoryCount(Math.min(hist.length, 50));
       setSavedToast(true);

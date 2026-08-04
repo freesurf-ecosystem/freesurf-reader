@@ -11,7 +11,7 @@ import { Play, Pause, Share2, X, EllipsisVertical } from "lucide-react-native";
 
 const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
 
-interface Recording { id: string; title: string; text: string; voice: string; uri: string; createdAt: number; }
+interface Recording { id: string; title: string; text: string; voice: string; uri: string; uris?: string[]; createdAt: number; }
 
 type Props = NativeStackScreenProps<RootStackParamList, "History">;
 
@@ -33,6 +33,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
 
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [chunkIndex, setChunkIndex] = useState(0);
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -48,20 +49,31 @@ export default function HistoryScreen({ navigation, route }: Props) {
   }
   async function persist(u: Recording[]) { await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(u)); setRecordings(u); }
 
-  async function togglePlay(item: Recording) {
-    if (playingId === item.id && isPlaying) { await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync(); soundRef.current = null; setPlayingId(null); setPos(0); setIsPlaying(false); return; }
-    if (playingId !== item.id) {
-      await soundRef.current?.stopAsync().catch(() => {});
-      await soundRef.current?.unloadAsync().catch(() => {});
+  const [chunkIndex, setChunkIndex] = useState(0);
+
+  async function togglePlay(item: Recording, startFrom = 0) {
+    const uris = item.uris && item.uris.length > 0 ? item.uris : [item.uri];
+    if (playingId === item.id && isPlaying) {
+      await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync();
+      soundRef.current = null; setPlayingId(null); setPos(0); setIsPlaying(false); setChunkIndex(0); return;
     }
-    const { sound } = await Audio.Sound.createAsync({ uri: item.uri }, { shouldPlay: true }, (s) => {
-      if (s.isLoaded) { setPos(s.positionMillis); setDur(s.durationMillis); if (s.didJustFinish) { setPlayingId(null); setPos(0); setIsPlaying(false); } }
-    });
-    soundRef.current = sound; setPlayingId(item.id); setIsPlaying(true);
-    const st = await sound.getStatusAsync(); if (st.isLoaded) setDur(st.durationMillis);
+    await soundRef.current?.stopAsync().catch(() => {});
+    await soundRef.current?.unloadAsync().catch(() => {});
+    const playChunk = async (idx: number) => {
+      if (idx >= uris.length) { setPlayingId(null); setIsPlaying(false); setChunkIndex(0); return; }
+      setChunkIndex(idx);
+      const { sound } = await Audio.Sound.createAsync({ uri: uris[idx] }, { shouldPlay: true }, (s) => {
+        if (s.isLoaded) { setPos(s.positionMillis); setDur(s.durationMillis); if (s.didJustFinish) { sound.unloadAsync().catch(() => {}); playChunk(idx + 1); } }
+      });
+      soundRef.current = sound;
+      const st = await sound.getStatusAsync(); if (st.isLoaded) setDur(st.durationMillis);
+    };
+    setPlayingId(item.id); setIsPlaying(true); setPos(startFrom);
+    await playChunk(startFrom > 0 ? 0 : 0);
   }
   async function seekAndPlay(item: Recording, locX: number) {
-    if (!dur || playingId !== item.id) { await togglePlay(item); return; }
+    if (playingId !== item.id) { await togglePlay(item); return; }
+    if (!dur) return;
     const ratio = Math.max(0, Math.min(1, locX / progW.current));
     const ms = ratio * dur;
     await soundRef.current?.setPositionAsync(ms); setPos(ms);
@@ -72,7 +84,12 @@ export default function HistoryScreen({ navigation, route }: Props) {
   async function saveRename() { const id = editingId; if (!id || !editingTitle.trim()) { cancelRename(); return; } await persist(recordings.map(r => r.id === id ? { ...r, title: editingTitle.trim() } : r)); cancelRename(); }
   async function shareItem(item: Recording) { if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(item.uri); }
   function deleteItem(item: Recording) {
-    Alert.alert("Delete", `Delete "${item.title}"?`, [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: async () => { await persist(recordings.filter(r => r.id !== item.id)); if (playingId === item.id) { await soundRef.current?.unloadAsync(); setPlayingId(null); } } }]);
+    Alert.alert("Delete", `Delete "${item.title}"?`, [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: async () => {
+      const uris = item.uris || [item.uri];
+      for (const u of uris) { FileSystem.deleteAsync(u, { idempotent: true }).catch(() => {}); }
+      await persist(recordings.filter(r => r.id !== item.id));
+      if (playingId === item.id) { await soundRef.current?.unloadAsync(); setPlayingId(null); setIsPlaying(false); }
+    }}]);
   }
 
   function renderCard(item: Recording) {
@@ -92,9 +109,12 @@ export default function HistoryScreen({ navigation, route }: Props) {
             ) : (
               <>
                 <Text style={[s.title, { color: c.text }]} numberOfLines={1}>{item.title}</Text>
-                <Text style={[s.meta, { color: c.dim }]}>{item.voice} · {formatDate(item.createdAt)}</Text>
+                <Text style={[s.meta, { color: c.dim }]}>
+                  {item.voice} · {formatDate(item.createdAt)}
+                  {item.uris && item.uris.length > 1 ? ` · ${item.uris.length} parts` : ""}
+                  {isActive ? ` · part ${chunkIndex + 1}/${item.uris?.length || 1}` : ""}
+                </Text>
               </>
-            )}
           </View>
           <TouchableOpacity style={[s.menuBtn, { borderColor: c.border }]} onPress={async () => {
             const nextOpen = isMenuOpen ? null : item.id;
@@ -102,13 +122,14 @@ export default function HistoryScreen({ navigation, route }: Props) {
             if (nextOpen && playingId !== item.id) {
               soundRef.current?.stopAsync().catch(() => {});
               soundRef.current?.unloadAsync().catch(() => {});
-              const { sound } = await Audio.Sound.createAsync({ uri: item.uri }, { shouldPlay: false }, (s) => {
+              const firstUri = item.uris?.[0] || item.uri;
+              const { sound } = await Audio.Sound.createAsync({ uri: firstUri }, { shouldPlay: false }, (s) => {
                 if (s.isLoaded) setDur(s.durationMillis || 0);
               });
               const st = await sound.getStatusAsync();
               if (st.isLoaded) { setDur(st.durationMillis || 0); setPos(0); }
               sound.unloadAsync().catch(() => {});
-              setPlayingId(null); setIsPlaying(false);
+              setPlayingId(null); setIsPlaying(false); setChunkIndex(0);
             }
           }}>
             <EllipsisVertical size={18} color={c.text} />
