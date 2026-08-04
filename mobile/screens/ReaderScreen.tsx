@@ -164,6 +164,9 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
             <TouchableOpacity onPress={() => setIsDark(!isDark)} style={styles.themeBtn}>
               {isDark ? <Sun size={18} color={colors.muted} /> : <Moon size={18} color={colors.muted} />}
             </TouchableOpacity>
+          </View>
+        </View>
+      </View>
 
       <Modal visible={showVoicePicker} transparent animationType="slide" onRequestClose={() => setShowVoicePicker(false)}>
         <TouchableOpacity style={styles.backdrop} onPress={() => setShowVoicePicker(false)} activeOpacity={1}>
