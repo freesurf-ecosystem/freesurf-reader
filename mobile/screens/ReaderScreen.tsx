@@ -17,6 +17,49 @@ type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader
 
 const MIN_INPUT_HEIGHT = 280;
 const MAX_CHUNK = 4000;
+
+function chunkText(t: string): string[] {
+  const text = t.trim();
+  if (text.length <= MAX_CHUNK) return [text];
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > MAX_CHUNK) {
+    let brk = remaining.lastIndexOf(". ", MAX_CHUNK);
+    if (brk < 500) brk = remaining.lastIndexOf("? ", MAX_CHUNK);
+    if (brk < 500) brk = remaining.lastIndexOf("! ", MAX_CHUNK);
+    if (brk < 500) brk = remaining.lastIndexOf("\n", MAX_CHUNK);
+    if (brk < 500) brk = remaining.lastIndexOf(" ", MAX_CHUNK);
+    if (brk < 500) brk = MAX_CHUNK;
+    chunks.push(remaining.slice(0, brk + 1).trim());
+    remaining = remaining.slice(brk + 1).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks.filter(Boolean);
+}
+
+function concatWavChunks(b64Chunks: string[]): string {
+  if (b64Chunks.length === 0) return "";
+  if (b64Chunks.length === 1) return b64Chunks[0];
+  const rawChunks = b64Chunks.map(b64 => {
+    const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  });
+  const v = new DataView(rawChunks[0].buffer);
+  const sampleRate = v.getUint32(24, true), bits = v.getUint16(34, true), ch = v.getUint16(22, true);
+  const byteRate = sampleRate * ch * (bits / 8), blockAlign = ch * (bits / 8);
+  const pcmTotal = rawChunks.reduce((s, r) => s + r.length - 44, 0);
+  const out = new Uint8Array(44 + pcmTotal); const dv = new DataView(out.buffer);
+  out.set([0x52,0x49,0x46,0x46],0); dv.setUint32(4,36+pcmTotal,true);
+  out.set([0x57,0x41,0x56,0x45],8); out.set([0x66,0x6D,0x74,0x20],12);
+  dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,ch,true);
+  dv.setUint32(24,sampleRate,true); dv.setUint32(28,byteRate,true);
+  dv.setUint16(32,blockAlign,true); dv.setUint16(34,bits,true);
+  out.set([0x64,0x61,0x74,0x61],36); dv.setUint32(40,pcmTotal,true);
+  let off = 44;
+  for (const r of rawChunks) { out.set(r.slice(44), off); off += r.length - 44; }
+  return btoa(String.fromCharCode(...out));
+}
 const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 
 async function ensureDir() {
@@ -42,8 +85,8 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   const handleSignOut = async () => { await supabase.auth.signOut(); };
 
   const colors = isDark
-    ? { bg: "#0b1020", card: "#111937", text: "#e8ecff", muted: "#5f6b7a", border: "#2a3568" }
-    : { bg: "#f8f9fa", card: "#ffffff", text: "#1a1a2e", muted: "#6b7280", border: "#e5e7eb" };
+    ? { bg: "#0b1020", card: "#111937", text: "#e8ecff", dim: "#8899bb", border: "#2a3568" }
+    : { bg: "#f8f9fa", card: "#ffffff", text: "#111827", dim: "#6b7280", border: "#e5e7eb" };
 
   useEffect(() => {
     ensureDir().then(() => {
@@ -69,8 +112,12 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
     setIsGenerating(true);
     try {
-      const ttsText = content.length > MAX_CHUNK ? content.slice(0, MAX_CHUNK) : content;
-      const b64 = await textToSpeech(ttsText, selectedVoice.voice);
+      const chunks = chunkText(content);
+      const b64Chunks: string[] = [];
+      for (const chunk of chunks) {
+        b64Chunks.push(await textToSpeech(chunk, selectedVoice.voice));
+      }
+      const b64 = concatWavChunks(b64Chunks);
       await ensureDir();
       const fname = `reader-${Date.now()}.wav`;
       const uri = AUDIO_DIR + fname;
@@ -121,7 +168,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TopBar appName="FreeSurf Reader" isLoggedIn={isLoggedIn} onSignIn={() => navigation.navigate("Auth")}
           onSignOut={handleSignOut}
-          colors={{ text: colors.text, muted: colors.muted, card: colors.card, border: colors.border }}
+          colors={{ text: colors.text, muted: colors.dim, card: colors.card, border: colors.border }}
           menuItems={[
             { label: "Recordings", onPress: () => navigation.navigate("History", { isDark }) },
           ]}
@@ -129,11 +176,11 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} keyboardShouldPersistTaps="always">
-        <TextInput style={[styles.titleInput, { color: colors.text, borderBottomColor: colors.border }]} placeholder="Document title" placeholderTextColor={colors.muted}
+        <TextInput style={[styles.titleInput, { color: colors.text, borderBottomColor: colors.border }]} placeholder="Document title" placeholderTextColor={colors.dim}
           value={title} onChangeText={setTitle} />
         <TextInput style={[styles.textInput, { color: colors.text, minHeight: inputHeight, height: inputHeight }]}
           placeholder="Paste an article, study guide, or document text here..."
-          placeholderTextColor={colors.muted} value={text} onChangeText={setText}
+          placeholderTextColor={colors.dim} value={text} onChangeText={setText}
           multiline scrollEnabled={false} textAlignVertical="top"
           onContentSizeChange={(e) => setInputHeight(Math.max(MIN_INPUT_HEIGHT, e.nativeEvent.contentSize.height + 24))}
         />
@@ -144,13 +191,13 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
         <View style={styles.barRow}>
           <TouchableOpacity style={styles.barBtn} onPress={handleImport} disabled={isImporting}>
-            <FileText size={16} color={colors.muted} />
-            <Text style={[styles.barBtnText, { color: colors.muted }]}>{isImporting ? "Importing..." : "Import"}</Text>
+            <FileText size={16} color={colors.dim} />
+            <Text style={[styles.barBtnText, { color: colors.dim }]}>{isImporting ? "Importing..." : "Import"}</Text>
           </TouchableOpacity>
 
           <View style={styles.barRight}>
             {timeEstimate && !isGenerating && !isPlaying ? (
-              <Text style={[styles.estimate, { color: colors.muted }]}>{timeEstimate}</Text>
+              <Text style={[styles.estimate, { color: colors.dim }]}>{timeEstimate}</Text>
             ) : null}
 
             <TouchableOpacity style={[styles.playBtn, { backgroundColor: isDark ? "#e8ecff15" : "#1a1a2e10" }, (isPlaying || isGenerating) && styles.playBtnActive]}
@@ -165,7 +212,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setIsDark(!isDark)} style={styles.themeBtn}>
-              {isDark ? <Sun size={18} color={colors.muted} /> : <Moon size={18} color={colors.muted} />}
+              {isDark ? <Sun size={18} color={colors.dim} /> : <Moon size={18} color={colors.dim} />}
             </TouchableOpacity>
           </View>
         </View>
@@ -180,7 +227,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
                 <TouchableOpacity key={v.id} style={[styles.voiceOption, selectedVoice.id === v.id && styles.voiceSelected, { borderBottomColor: colors.border }]}
                   onPress={() => { setSelectedVoice(v); setShowVoicePicker(false); }}>
                   <Text style={[styles.voiceLabel, { color: colors.text }]}>{selectedVoice.id === v.id ? "● " : "  "}{v.label}</Text>
-                  <Text style={[styles.voiceDesc, { color: colors.muted }]}>{v.description}</Text>
+                  <Text style={[styles.voiceDesc, { color: colors.dim }]}>{v.description}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>

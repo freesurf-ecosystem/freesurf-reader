@@ -7,10 +7,10 @@ type Props = {
   onSignOut: () => void;
   isLoggedIn: boolean;
   menuItems?: { label: string; onPress: () => void }[];
-  colors?: { text: string; muted: string; card: string; border: string };
+  colors?: { text: string; dim: string; card: string; border: string };
 };
 
-const DARK = { text: "#e8ecff", muted: "#5f6b7a", card: "#111937", border: "#2a3568" };
+const DARK = { text: "#e8ecff", dim: "#8899bb", card: "#111937", border: "#2a3568" };
 
 export default function TopBar({ appName, onSignIn, onSignOut, isLoggedIn, menuItems, colors }: Props) {
   const [open, setOpen] = useState(false);
@@ -36,7 +36,7 @@ export default function TopBar({ appName, onSignIn, onSignOut, isLoggedIn, menuI
             {menuItems && menuItems.length > 0 ? <View style={[styles.divider, { backgroundColor: c.border }]} /> : null}
             {isLoggedIn ? (
               <Pressable style={styles.item} onPress={() => { setOpen(false); onSignOut(); }}>
-                <Text style={[styles.signOut, { color: c.muted }]}>Log out</Text>
+                <Text style={[styles.signOut, { color: c.dim }]}>Log out</Text>
               </Pressable>
             ) : (
               <Pressable style={styles.item} onPress={() => { setOpen(false); onSignIn(); }}>

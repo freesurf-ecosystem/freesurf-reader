@@ -28,8 +28,8 @@ export default function HistoryScreen({ navigation, route }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const isDark = route.params?.isDark ?? true;
   const colors = isDark
-    ? { bg: "#0b1020", card: "#111937", text: "#e8ecff", muted: "#5f6b7a", border: "#2a3568", accent: "#5b8cff" }
-    : { bg: "#f8f9fa", card: "#ffffff", text: "#1a1a2e", muted: "#6b7280", border: "#e5e7eb", accent: "#2563eb" };
+    ? { bg: "#0b1020", card: "#111937", text: "#e8ecff", dim: "#8899bb", border: "#2a3568", accent: "#5b8cff" }
+    : { bg: "#f8f9fa", card: "#ffffff", text: "#111827", dim: "#6b7280", border: "#e5e7eb", accent: "#2563eb" };
 
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [positionMs, setPositionMs] = useState(0);
@@ -109,7 +109,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TopBar appName="Recordings" isLoggedIn={false} onSignIn={() => {}} onSignOut={() => {}}
-          colors={{ text: colors.text, muted: colors.muted, card: colors.card, border: colors.border }}
+          colors={{ text: colors.text, muted: colors.dim, card: colors.card, border: colors.border }}
           menuItems={[{ label: "Dashboard", onPress: () => navigation.goBack() }]}
         />
       </View>
@@ -121,7 +121,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>No recordings yet</Text>
-            <Text style={[styles.emptySub, { color: colors.muted }]}>Generated audio will appear here</Text>
+            <Text style={[styles.emptySub, { color: colors.dim }]}>Generated audio will appear here</Text>
           </View>
         }
         renderItem={({ item }) => {
@@ -145,7 +145,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
                   ) : (
                     <>
                       <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-                      <Text style={[styles.meta, { color: colors.muted }]}>{item.voice} · {formatDate(item.createdAt)}</Text>
+                      <Text style={[styles.meta, { color: colors.dim }]}>{item.voice} · {formatDate(item.createdAt)}</Text>
                     </>
                   )}
                 </View>
@@ -156,13 +156,13 @@ export default function HistoryScreen({ navigation, route }: Props) {
               {isActive && (
                 <>
                   <View style={styles.progressRow}>
-                    <Text style={[styles.timeTxt, { color: colors.muted }]}>{formatTime(positionMs)}</Text>
+                    <Text style={[styles.timeTxt, { color: colors.dim }]}>{formatTime(positionMs)}</Text>
                     <TouchableOpacity style={[styles.progTrack, { backgroundColor: colors.bg }]}
                       onPress={(e) => seek(item, e.nativeEvent.locationX)}
                       onLayout={(e) => { progRef.current = e.nativeEvent.layout.width; }} activeOpacity={1}>
                       <View style={[styles.progFill, { width: `${progress * 100}%`, backgroundColor: colors.accent }]} />
                     </TouchableOpacity>
-                    <Text style={[styles.timeTxt, { color: colors.muted }]}>{formatTime(durationMs)}</Text>
+                    <Text style={[styles.timeTxt, { color: colors.dim }]}>{formatTime(durationMs)}</Text>
                   </View>
                   <View style={styles.controlsRow}>
                     <TouchableOpacity style={[styles.ctrlBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => jump(item, -15000)}>
