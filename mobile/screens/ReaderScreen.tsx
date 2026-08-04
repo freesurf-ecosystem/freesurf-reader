@@ -170,8 +170,8 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
         <View style={styles.barRow}>
           <TouchableOpacity style={styles.barBtn} onPress={handleImport} disabled={isImporting}>
-            <FileText size={16} color={colors.dim} />
-            <Text style={[styles.barBtnText, { color: colors.dim }]}>{isImporting ? "Importing..." : "Import"}</Text>
+            <FileText size={16} color={colors.text} />
+            <Text style={[styles.barBtnText, { color: colors.text }]}>{isImporting ? "Importing..." : "Import"}</Text>
           </TouchableOpacity>
 
           <View style={styles.barRight}>
@@ -201,7 +201,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
         <TouchableOpacity style={styles.backdrop} onPress={() => setShowVoicePicker(false)} activeOpacity={1}>
           <View style={[styles.sheet, { backgroundColor: colors.card }]}>
             <Text style={[styles.sheetTitle, { color: colors.text, borderBottomColor: colors.border }]}>Choose voice</Text>
-            <ScrollView style={{ maxHeight: 420 }} bounces={false}>
+            <ScrollView key="voiceList" style={{ maxHeight: 420 }} bounces={false}>
               {VOICES.map(v => (
                 <TouchableOpacity key={v.id} style={[styles.voiceOption, selectedVoice.id === v.id && styles.voiceSelected, { borderBottomColor: colors.border }]}
                   onPress={() => { setSelectedVoice(v); setShowVoicePicker(false); }}>
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   estimate: { fontSize: 12, fontWeight: "600" },
   playBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 9, borderRadius: 22 },
   playBtnActive: { backgroundColor: "#5b8cff" },
-  playBtnText: { color: "#e8ecff", fontSize: 14, fontWeight: "700" },
+  playBtnText: { fontSize: 14, fontWeight: "700" },
   playBtnTextActive: { color: "#fff", fontSize: 14, fontWeight: "700" },
   voiceChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1 },
   voiceChipText: { fontSize: 12, fontWeight: "600" },
