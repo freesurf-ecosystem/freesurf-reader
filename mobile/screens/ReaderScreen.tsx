@@ -120,8 +120,12 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
     setIsGenerating(true);
     try {
-      const ttsText = content.length > MAX_CHUNK ? content.slice(0, MAX_CHUNK) : content;
-      const b64 = await textToSpeech(ttsText, selectedVoice.voice);
+      const chunks = chunkText(content);
+      const b64Chunks: string[] = [];
+      for (const chunk of chunks) {
+        b64Chunks.push(await textToSpeech(chunk, selectedVoice.voice));
+      }
+      const b64 = concatWavChunks(b64Chunks);
       await ensureDir();
       const fname = `reader-${Date.now()}.wav`;
       const uri = AUDIO_DIR + fname;
