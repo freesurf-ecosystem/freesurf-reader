@@ -120,12 +120,8 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
     setIsGenerating(true);
     try {
-      const chunks = chunkText(content);
-      const b64Chunks: string[] = [];
-      for (const chunk of chunks) {
-        b64Chunks.push(await textToSpeech(chunk, selectedVoice.voice));
-      }
-      const b64 = concatWavChunks(b64Chunks);
+      const ttsText = content.length > MAX_CHUNK ? content.slice(0, MAX_CHUNK) : content;
+      const b64 = await textToSpeech(ttsText, selectedVoice.voice);
       await ensureDir();
       const fname = `reader-${Date.now()}.wav`;
       const uri = AUDIO_DIR + fname;
@@ -248,7 +244,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingTop: 12, paddingHorizontal: 20, paddingBottom: 8, borderBottomWidth: 1 },
+  header: { paddingTop: 56, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1 },
 
   body: { flex: 1 },
   bodyContent: { padding: 24, paddingBottom: 24 },
