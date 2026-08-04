@@ -160,27 +160,34 @@ export default function HistoryScreen({ navigation, route }: Props) {
           <View>
             <View style={s.progRow}>
               <Text style={[s.time, { color: c.dim }]}>{formatTime(pos + (cumulative[chunkIndex - 1] || 0))}</Text>
-              <TouchableOpacity style={[s.track, { backgroundColor: c.bg }]}
+              <View style={[s.track, { backgroundColor: c.bg }]}
                 onLayout={(e) => { progW.current = e.nativeEvent.layout.width; }}
-                onStartShouldSetResponder={() => true}
-                onResponderMove={(e) => {
+                onTouchStart={(e) => {
                   if (!totalDur || !progW.current) return;
-                  const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / progW.current));
+                  const x = e.nativeEvent.locationX;
+                  const ratio = Math.max(0, Math.min(1, x / progW.current));
+                  const targetMs = ratio * totalDur;
+                  let ci = 0, offset = 0;
+                  for (let j = 0; j < cumulative.length; j++) { if (targetMs < cumulative[j]) { ci = j; offset = j > 0 ? cumulative[j - 1] : 0; break; } }
+                  setPos(targetMs); setChunkIndex(ci); setDragging(true);
+                }}
+                onTouchMove={(e) => {
+                  if (!dragging || !totalDur || !progW.current) return;
+                  const x = e.nativeEvent.locationX;
+                  const ratio = Math.max(0, Math.min(1, x / progW.current));
                   const targetMs = ratio * totalDur;
                   let ci = 0, offset = 0;
                   for (let j = 0; j < cumulative.length; j++) { if (targetMs < cumulative[j]) { ci = j; offset = j > 0 ? cumulative[j - 1] : 0; break; } }
                   setPos(targetMs); setChunkIndex(ci);
-                  setDragging(true);
                 }}
-                onResponderRelease={(e) => {
+                onTouchEnd={() => {
+                  if (!dragging || !totalDur || !progW.current) { setDragging(false); return; }
                   setDragging(false);
-                  if (!totalDur || !progW.current) return;
-                  const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / progW.current));
-                  const targetMs = ratio * totalDur;
+                  const targetMs = pos;
                   let ci = 0, offset = 0;
                   for (let j = 0; j < cumulative.length; j++) { if (targetMs < cumulative[j]) { ci = j; offset = j > 0 ? cumulative[j - 1] : 0; break; } }
                   togglePlayAt(item, ci, targetMs - offset);
-                }} activeOpacity={1}>
+                }}>
                 <View style={[s.fill, { width: `${totalDur > 0 ? Math.min(1, (pos + (cumulative[chunkIndex - 1] || 0)) / totalDur) * 100 : 0}%`, backgroundColor: c.accent }]} />
               </TouchableOpacity>
               <Text style={[s.time, { color: c.dim }]}>{formatTime(totalDur)}</Text>
