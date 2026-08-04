@@ -52,27 +52,49 @@ export default function HistoryScreen({ navigation, route }: Props) {
   }
   async function persist(u: Recording[]) { await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(u)); setRecordings(u); }
 
-  async function togglePlay(item: Recording, startFrom = 0) {
+  const nextSoundRef = useRef<Audio.Sound | null>(null);
+
+  async function togglePlay(item: Recording) {
     const uris = item.uris && item.uris.length > 0 ? item.uris : [item.uri];
-    console.log(`[History] togglePlay uris count: ${uris.length}, has uris: ${!!item.uris}`);
     if (playingId === item.id && isPlaying) {
       await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync();
-      soundRef.current = null; setPlayingId(null); setPos(0); setIsPlaying(false); setChunkIndex(0); return;
+      await nextSoundRef.current?.unloadAsync().catch(() => {});
+      soundRef.current = null; nextSoundRef.current = null;
+      setPlayingId(null); setPos(0); setIsPlaying(false); setChunkIndex(0); return;
     }
     await soundRef.current?.stopAsync().catch(() => {});
     await soundRef.current?.unloadAsync().catch(() => {});
+    await nextSoundRef.current?.unloadAsync().catch(() => {});
+
     const playChunk = async (idx: number) => {
-      if (idx >= uris.length) { console.log(`[History] All ${uris.length} chunks done`); setPlayingId(null); setIsPlaying(false); setChunkIndex(0); return; }
-      console.log(`[History] Playing chunk ${idx + 1}/${uris.length}: ${uris[idx].slice(-30)}`);
+      if (idx >= uris.length) { setPlayingId(null); setIsPlaying(false); setChunkIndex(0); return; }
       setChunkIndex(idx);
+      // Preload next chunk for gapless transition
+      if (idx + 1 < uris.length) {
+        nextSoundRef.current?.unloadAsync().catch(() => {});
+        const { sound: next } = await Audio.Sound.createAsync({ uri: uris[idx + 1] }, { shouldPlay: false });
+        nextSoundRef.current = next;
+      }
       const { sound } = await Audio.Sound.createAsync({ uri: uris[idx] }, { shouldPlay: true }, (s) => {
-        if (s.isLoaded) { setPos(s.positionMillis); setDur(s.durationMillis); if (s.didJustFinish) { console.log(`[History] Chunk ${idx + 1} finished, starting next`); sound.unloadAsync().catch(() => {}); playChunk(idx + 1); } }
+        if (s.isLoaded) { setPos(s.positionMillis); setDur(s.durationMillis);
+          if (s.didJustFinish) {
+            sound.unloadAsync().catch(() => {});
+            if (nextSoundRef.current) {
+              soundRef.current = nextSoundRef.current;
+              nextSoundRef.current = null;
+              soundRef.current!.playAsync();
+              playChunk(idx + 1);
+            } else {
+              playChunk(idx + 1);
+            }
+          }
+        }
       });
       soundRef.current = sound;
       const st = await sound.getStatusAsync(); if (st.isLoaded) setDur(st.durationMillis);
     };
-    setPlayingId(item.id); setIsPlaying(true); setPos(startFrom);
-    await playChunk(startFrom > 0 ? 0 : 0);
+    setPlayingId(item.id); setIsPlaying(true); setPos(0);
+    await playChunk(0);
   }
   async function seekAndPlay(item: Recording, locX: number) {
     if (playingId !== item.id) { await togglePlay(item); return; }
@@ -125,6 +147,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
             if (nextOpen && playingId !== item.id) {
               soundRef.current?.stopAsync().catch(() => {});
               soundRef.current?.unloadAsync().catch(() => {});
+              nextSoundRef.current?.unloadAsync().catch(() => {});
               const firstUri = item.uris?.[0] || item.uri;
               const { sound } = await Audio.Sound.createAsync({ uri: firstUri }, { shouldPlay: false }, (s) => {
                 if (s.isLoaded) setDur(s.durationMillis || 0);
