@@ -133,6 +133,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       // Generate remaining chunks, then update entry with full URIs
       for (let i = 1; i < chunks.length; i++) {
         try {
+          await new Promise(r => setTimeout(r, 2000));
           const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
           const fname = `reader-${batchId}-${i}.wav`;
           const uri = AUDIO_DIR + fname;
@@ -140,7 +141,18 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
           uris.push(uri);
           console.log(`[Reader] Chunk ${i + 1}/${chunks.length} OK — ${chunks[i].length} chars → ${(b64.length / 1024).toFixed(0)}KB`);
         } catch (e: any) {
-          console.log(`[Reader] Chunk ${i + 1}/${chunks.length} FAILED: ${e.message}`);
+          console.log(`[Reader] Chunk ${i + 1}/${chunks.length} FAILED: ${e.message}, retrying...`);
+          try {
+            await new Promise(r => setTimeout(r, 5000));
+            const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
+            const fname = `reader-${batchId}-${i}.wav`;
+            const uri = AUDIO_DIR + fname;
+            await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
+            uris.push(uri);
+            console.log(`[Reader] Chunk ${i + 1}/${chunks.length} OK after retry`);
+          } catch (e2: any) {
+            console.log(`[Reader] Chunk ${i + 1}/${chunks.length} FAILED after retry: ${e2.message}`);
+          }
         }
       }
       console.log(`[Reader] All done — ${uris.length}/${chunks.length} chunks saved`);
