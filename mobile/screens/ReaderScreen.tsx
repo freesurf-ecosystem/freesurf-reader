@@ -50,6 +50,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   const [selectedVoice, setSelectedVoice] = useState<Voice>(VOICES[0]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [genProgress, setGenProgress] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [showVoicePicker, setShowVoicePicker] = useState(false);
   const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
@@ -79,7 +80,8 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
     const chunks = Math.max(1, Math.ceil(len / MAX_CHUNK));
     const totalSec = Math.ceil(len * 3 / 1000) + (chunks * 15);
     const m = Math.floor(totalSec / 60), s = totalSec % 60;
-    return m > 0 ? `~${m}m ${s}s` : `~${s}s`;
+    const chunkInfo = chunks > 1 ? ` (${chunks} parts)` : "";
+    return m > 0 ? `~${m}m ${s}s${chunkInfo}` : `~${s}s${chunkInfo}`;
   }, [text]);
 
   async function handleRead() {
@@ -88,18 +90,22 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
     if (isPlaying || isGenerating) { await stopPlayback(); return; }
 
     setIsGenerating(true);
+    setGenProgress("");
     try {
       const chunks = chunkText(content);
 
       await ensureDir();
+      const batchId = Date.now();
       const uris: string[] = [];
       for (let i = 0; i < chunks.length; i++) {
+        setGenProgress(`Chunk ${i + 1}/${chunks.length}`);
         const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
-        const fname = `reader-${Date.now()}-${i}.wav`;
+        const fname = `reader-${batchId}-${i}.wav`;
         const uri = AUDIO_DIR + fname;
         await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
         uris.push(uri);
       }
+      setGenProgress("");
 
       const firstUri = uris[0];
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
@@ -111,7 +117,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       setIsGenerating(false);
 
       const hist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
-      hist.unshift({ title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, createdAt: Date.now() });
+      hist.unshift({ title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, uris, createdAt: Date.now() });
       await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(hist.slice(0, 50)));
       setHistoryCount(Math.min(hist.length, 50));
       setSavedToast(true);
@@ -182,7 +188,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
             <TouchableOpacity style={[styles.playBtn, { backgroundColor: isDark ? "#e8ecff15" : "#1a1a2e10" }]}
               onPress={handleRead}>
               <Text style={[styles.playBtnText, { color: colors.text }, (isPlaying || isGenerating) && styles.playBtnTextActive]}>
-                {isGenerating ? `Preparing${timeEstimate ? ` ${timeEstimate}` : ""}` : isPlaying ? "Stop" : "Read Aloud"}
+                {isGenerating ? (genProgress || `Preparing${timeEstimate ? ` ${timeEstimate}` : ""}`) : isPlaying ? "Stop" : "Read Aloud"}
               </Text>
             </TouchableOpacity>
 
