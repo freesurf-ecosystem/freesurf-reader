@@ -95,7 +95,35 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       await ensureDir();
       const batchId = Date.now();
       const uris: string[] = [];
-      for (let i = 0; i < chunks.length; i++) {
+
+      // Generate and play first chunk immediately
+      const firstB64 = await textToSpeech(chunks[0], selectedVoice.voice);
+      const firstFname = `reader-${batchId}-0.wav`;
+      const firstUri = AUDIO_DIR + firstFname;
+      await FileSystem.writeAsStringAsync(firstUri, firstB64, { encoding: FileSystem.EncodingType.Base64 });
+      uris.push(firstUri);
+      console.log(`[Reader] Chunk 1/${chunks.length} OK → ${(firstB64.length / 1024).toFixed(0)}KB`);
+
+      // Start playback immediately
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
+      const { sound } = await Audio.Sound.createAsync({ uri: firstUri }, { shouldPlay: true }, (status) => {
+        if (status.isLoaded && status.didJustFinish) { setIsPlaying(false); sound.unloadAsync().catch(() => {}); }
+      });
+      soundRef.current = sound;
+      setIsPlaying(true);
+      setIsGenerating(false);
+
+      // Save entry immediately so it's visible in Recordings
+      const hist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
+      const entryId = `${batchId}-${uris.length}`;
+      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, createdAt: Date.now() });
+      await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(hist.slice(0, 50)));
+      setHistoryCount(Math.min(hist.length, 50));
+      setSavedToast(true);
+      setTimeout(() => setSavedToast(false), 3000);
+
+      // Generate remaining chunks in background (don't block playback)
+      for (let i = 1; i < chunks.length; i++) {
         try {
           const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
           const fname = `reader-${batchId}-${i}.wav`;
@@ -107,24 +135,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
           console.log(`[Reader] Chunk ${i + 1}/${chunks.length} FAILED: ${e.message}`);
         }
       }
-      console.log(`[Reader] Generated ${uris.length} chunks — first ${uris[0].substring(0, 50)} chars`);
-
-      const firstUri = uris[0];
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
-      const { sound } = await Audio.Sound.createAsync({ uri: firstUri }, { shouldPlay: true }, (status) => {
-        if (status.isLoaded && status.didJustFinish) { setIsPlaying(false); sound.unloadAsync().catch(() => {}); }
-      });
-      soundRef.current = sound;
-      setIsPlaying(true);
-      setIsGenerating(false);
-
-      const hist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
-      const entryId = `${batchId}-${uris.length}`;
-      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, createdAt: Date.now() });
-      await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(hist.slice(0, 50)));
-      setHistoryCount(Math.min(hist.length, 50));
-      setSavedToast(true);
-      setTimeout(() => setSavedToast(false), 3000);
+      console.log(`[Reader] All done — ${uris.length}/${chunks.length} chunks saved`);
     } catch (e: any) {
       setIsGenerating(false);
       Alert.alert("Error", e.message || "Failed to generate audio.");
