@@ -192,9 +192,8 @@ export default function ReaderScreen({ navigation }: Props) {
           colors={{ text: colors.text, dim: colors.dim, card: colors.card, border: colors.border }}
           menuItems={[
             { label: "Recordings", onPress: () => navigation.navigate("History", { isDark }) },
-            { label: "Privacy Policy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
-            { label: "Terms of Service", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
             { label: "Support", onPress: () => Linking.openURL("https://invoices.freesurf.tools/support") },
+            { label: "Privacy & Terms", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
           ]}
         />
       </View>
