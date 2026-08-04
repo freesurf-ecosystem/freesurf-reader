@@ -15,6 +15,7 @@ import { Sun, Moon, FileText } from "lucide-react-native";
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; isLoggedIn: boolean };
 
+const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 const MIN_INPUT_HEIGHT = 280;
 const MAX_CHUNK = 4000;
 const HISTORY_PATH = AUDIO_DIR + "history.json";
