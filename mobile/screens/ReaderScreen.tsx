@@ -212,7 +212,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setIsDark(!isDark)} style={styles.themeBtn}>
-              {isDark ? <Sun size={18} color={colors.dim} /> : <Moon size={18} color={colors.dim} />}
+              {isDark ? <Sun size={18} color={colors.text} /> : <Moon size={18} color={colors.text} />}
             </TouchableOpacity>
           </View>
         </View>

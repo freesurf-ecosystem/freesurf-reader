@@ -7,7 +7,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import TopBar from "../components/TopBar";
-import { Play, Pause, Share2, X, Download } from "lucide-react-native";
+import { Play, Pause, Share2, X, EllipsisVertical, Sun, Moon } from "lucide-react-native";
 
 const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
 
@@ -109,7 +109,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TopBar appName="Recordings" isLoggedIn={false} onSignIn={() => {}} onSignOut={() => {}}
-          colors={{ text: colors.text, muted: colors.dim, card: colors.card, border: colors.border }}
+          colors={{ text: colors.text, dim: colors.dim, card: colors.card, border: colors.border }}
           menuItems={[{ label: "Dashboard", onPress: () => navigation.goBack() }]}
         />
       </View>
@@ -131,10 +131,10 @@ export default function HistoryScreen({ navigation, route }: Props) {
           const progress = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
 
           return (
-            <View key={item.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.row}>
                 <TouchableOpacity style={[styles.playBtn, { borderColor: colors.border, backgroundColor: isActive ? colors.text : colors.bg }]}
-                  onPress={() => { setOpenMenuId(isMenuOpen ? null : item.id); togglePlay(item); }}>
+                  onPress={() => togglePlay(item)}>
                   {isActive ? <Pause size={18} color={isActive ? colors.bg : colors.text} /> : <Play size={18} color={colors.text} />}
                 </TouchableOpacity>
 
@@ -149,7 +149,11 @@ export default function HistoryScreen({ navigation, route }: Props) {
                     </>
                   )}
                 </View>
-              </View>
+
+                <TouchableOpacity style={[styles.menuBtn, { borderColor: colors.border }]}
+                  onPress={() => setOpenMenuId(isMenuOpen ? null : item.id)}>
+                  <EllipsisVertical size={18} color={colors.text} />
+                </TouchableOpacity>
 
               {isMenuOpen && (
               <>
@@ -216,6 +220,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
   playBtn: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   info: { flex: 1 },
+  menuBtn: { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   title: { fontSize: 15, fontWeight: "600", marginBottom: 2 },
   renameInput: { fontSize: 14, fontWeight: "600", borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   meta: { fontSize: 12 },
