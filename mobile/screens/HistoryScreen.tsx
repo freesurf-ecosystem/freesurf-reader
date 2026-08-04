@@ -57,7 +57,15 @@ export default function HistoryScreen({ navigation, route }: Props) {
 
   const nextSoundRef = useRef<Audio.Sound | null>(null);
 
-  async function togglePlay(item: Recording) { await togglePlayAt(item, 0, 0); }
+  async function togglePlay(item: Recording) {
+    if (playingId === item.id && isPlaying) {
+      await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync();
+      await nextSoundRef.current?.unloadAsync().catch(() => {});
+      soundRef.current = null; nextSoundRef.current = null;
+      setPlayingId(null); setPos(0); setIsPlaying(false); setChunkIndex(0); return;
+    }
+    await togglePlayAt(item, 0, 0);
+  }
   async function togglePlayAt(item: Recording, ci: number, posMs: number) {
     const uris = item.uris && item.uris.length > 0 ? item.uris : [item.uri];
     await soundRef.current?.stopAsync().catch(() => {});
