@@ -135,7 +135,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
               <View style={styles.row}>
                 <TouchableOpacity style={[styles.playBtn, { borderColor: colors.border, backgroundColor: isActive ? colors.text : colors.bg }]}
                   onPress={() => togglePlay(item)}>
-                  {isActive ? <Pause size={18} color={isActive ? colors.bg : colors.text} /> : <Play size={18} color={colors.text} />}
+                  {isActive ? <Pause size={18} color={colors.bg} /> : <Play size={18} color={colors.text} />}
                 </TouchableOpacity>
 
                 <View style={styles.info}>
