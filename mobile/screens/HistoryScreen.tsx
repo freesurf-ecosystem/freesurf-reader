@@ -36,6 +36,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
   const [durationMs, setDurationMs] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const progRef = useRef(0);
 
@@ -126,13 +127,14 @@ export default function HistoryScreen({ navigation, route }: Props) {
         renderItem={({ item }) => {
           const isActive = playingId === item.id;
           const isEditing = editingId === item.id;
+          const isMenuOpen = openMenuId === item.id;
           const progress = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
 
           return (
             <View key={item.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.row}>
                 <TouchableOpacity style={[styles.playBtn, { borderColor: colors.border, backgroundColor: isActive ? colors.text : colors.bg }]}
-                  onPress={() => togglePlay(item)}>
+                  onPress={() => { setOpenMenuId(isMenuOpen ? null : item.id); togglePlay(item); }}>
                   {isActive ? <Pause size={18} color={isActive ? colors.bg : colors.text} /> : <Play size={18} color={colors.text} />}
                 </TouchableOpacity>
 
@@ -149,6 +151,8 @@ export default function HistoryScreen({ navigation, route }: Props) {
                 </View>
               </View>
 
+              {isMenuOpen && (
+              <>
               {isActive && (
                 <>
                   <View style={styles.progressRow}>
@@ -190,6 +194,8 @@ export default function HistoryScreen({ navigation, route }: Props) {
                   <X size={18} color="#f87171" />
                 </TouchableOpacity>
               </View>
+              </>
+              )}
             </View>
           );
         }}

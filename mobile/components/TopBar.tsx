@@ -52,7 +52,7 @@ export default function TopBar({ appName, onSignIn, onSignOut, isLoggedIn, menuI
 
 const styles = StyleSheet.create({
   bar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  brand: { fontSize: 22, fontWeight: "700", letterSpacing: 0.5 },
+  brand: { fontSize: 16, fontWeight: "700", letterSpacing: 0.5 },
   hamburger: { padding: 6, gap: 5, justifyContent: "center", alignItems: "center" },
   line: { width: 22, height: 2, borderRadius: 2 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },

@@ -16,6 +16,7 @@ import { Sun, Moon, FileText } from "lucide-react-native";
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; isLoggedIn: boolean };
 
 const MIN_INPUT_HEIGHT = 280;
+const MAX_CHUNK = 4000;
 const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 
 async function ensureDir() {
@@ -55,8 +56,9 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   const timeEstimate = useMemo(() => {
     const len = (text || "").trim().length;
     if (!len) return null;
-    const sec = Math.ceil(len * 3 / 1000) + 15;
-    const m = Math.floor(sec / 60), s = sec % 60;
+    const chunks = Math.ceil(len / MAX_CHUNK);
+    const totalSec = Math.ceil(len * 3 / 1000) + (chunks * 15);
+    const m = Math.floor(totalSec / 60), s = totalSec % 60;
     return m > 0 ? `~${m}m ${s}s` : `~${s}s`;
   }, [text]);
 
@@ -67,7 +69,8 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
     setIsGenerating(true);
     try {
-      const b64 = await textToSpeech(content, selectedVoice.voice);
+      const ttsText = content.length > MAX_CHUNK ? content.slice(0, MAX_CHUNK) : content;
+      const b64 = await textToSpeech(ttsText, selectedVoice.voice);
       await ensureDir();
       const fname = `reader-${Date.now()}.wav`;
       const uri = AUDIO_DIR + fname;
