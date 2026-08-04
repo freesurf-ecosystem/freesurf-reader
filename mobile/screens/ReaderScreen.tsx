@@ -113,16 +113,16 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       setIsPlaying(true);
       setIsGenerating(false);
 
-      // Save entry immediately so it's visible in Recordings
+      // Save placeholder entry immediately (toast + Recordings visibility)
+      const entryId = `${batchId}-0`;
       const hist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
-      const entryId = `${batchId}-${uris.length}`;
-      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, uris, createdAt: Date.now() });
+      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, uris: [firstUri], createdAt: Date.now() });
       await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(hist.slice(0, 50)));
       setHistoryCount(Math.min(hist.length, 50));
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 3000);
 
-      // Generate remaining chunks in background (don't block playback)
+      // Generate remaining chunks, then update entry with full URIs
       for (let i = 1; i < chunks.length; i++) {
         try {
           const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
@@ -136,6 +136,12 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
         }
       }
       console.log(`[Reader] All done — ${uris.length}/${chunks.length} chunks saved`);
+
+      // Update history with all URIs
+      const updatedHist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
+      const idx = updatedHist.findIndex((r: {id: string}) => r.id === entryId);
+      if (idx >= 0) updatedHist[idx].uris = uris;
+      await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(updatedHist));
     } catch (e: any) {
       setIsGenerating(false);
       Alert.alert("Error", e.message || "Failed to generate audio.");
