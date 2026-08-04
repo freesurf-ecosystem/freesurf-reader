@@ -45,12 +45,13 @@ export default function HistoryScreen({ navigation, route }: Props) {
   useFocusEffect(useCallback(() => { loadHistory(); return () => { soundRef.current?.unloadAsync().catch(() => {}); }; }, []));
 
   async function loadHistory() {
-    try { const raw = await FileSystem.readAsStringAsync(HISTORY_PATH, { encoding: FileSystem.EncodingType.Utf8 }).catch(() => "[]"); setRecordings(JSON.parse(raw)); } catch {}
+    try { const raw = await FileSystem.readAsStringAsync(HISTORY_PATH, { encoding: FileSystem.EncodingType.Utf8 }).catch(() => "[]"); const r = JSON.parse(raw); setRecordings(r); console.log(`[History] Loaded ${r.length} recordings, first has uris: ${!!r[0]?.uris}, uris length: ${r[0]?.uris?.length || 0}`); } catch {}
   }
   async function persist(u: Recording[]) { await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(u)); setRecordings(u); }
 
   async function togglePlay(item: Recording, startFrom = 0) {
     const uris = item.uris && item.uris.length > 0 ? item.uris : [item.uri];
+    console.log(`[History] togglePlay uris count: ${uris.length}, has uris: ${!!item.uris}`);
     if (playingId === item.id && isPlaying) {
       await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync();
       soundRef.current = null; setPlayingId(null); setPos(0); setIsPlaying(false); setChunkIndex(0); return;
@@ -58,10 +59,11 @@ export default function HistoryScreen({ navigation, route }: Props) {
     await soundRef.current?.stopAsync().catch(() => {});
     await soundRef.current?.unloadAsync().catch(() => {});
     const playChunk = async (idx: number) => {
-      if (idx >= uris.length) { setPlayingId(null); setIsPlaying(false); setChunkIndex(0); return; }
+      if (idx >= uris.length) { console.log(`[History] All ${uris.length} chunks done`); setPlayingId(null); setIsPlaying(false); setChunkIndex(0); return; }
+      console.log(`[History] Playing chunk ${idx + 1}/${uris.length}: ${uris[idx].slice(-30)}`);
       setChunkIndex(idx);
       const { sound } = await Audio.Sound.createAsync({ uri: uris[idx] }, { shouldPlay: true }, (s) => {
-        if (s.isLoaded) { setPos(s.positionMillis); setDur(s.durationMillis); if (s.didJustFinish) { sound.unloadAsync().catch(() => {}); playChunk(idx + 1); } }
+        if (s.isLoaded) { setPos(s.positionMillis); setDur(s.durationMillis); if (s.didJustFinish) { console.log(`[History] Chunk ${idx + 1} finished, starting next`); sound.unloadAsync().catch(() => {}); playChunk(idx + 1); } }
       });
       soundRef.current = sound;
       const st = await sound.getStatusAsync(); if (st.isLoaded) setDur(st.durationMillis);
