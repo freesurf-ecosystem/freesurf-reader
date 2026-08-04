@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Linking,
   ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { Audio } from "expo-av";
@@ -9,11 +9,10 @@ import * as DocumentPicker from "expo-document-picker";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import { textToSpeech, VOICES, type Voice } from "../lib/tts";
-import { supabase } from "../lib/supabase";
 import TopBar from "../components/TopBar";
 import { Sun, Moon, FileText } from "lucide-react-native";
 
-type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; isLoggedIn: boolean };
+type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader"> };
 
 const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 const MIN_INPUT_HEIGHT = 280;
@@ -52,7 +51,7 @@ async function ensureDir() {
   if (!info.exists) await FileSystem.makeDirectoryAsync(AUDIO_DIR, { intermediates: true });
 }
 
-export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
+export default function ReaderScreen({ navigation }: Props) {
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [selectedVoice, setSelectedVoice] = useState<Voice>(VOICES[0]);
@@ -66,8 +65,6 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   const [isDark, setIsDark] = useState(true);
 
   const soundRef = useRef<Audio.Sound | null>(null);
-
-  const handleSignOut = async () => { await supabase.auth.signOut(); };
 
   const colors = isDark
     ? { bg: "#0b1020", card: "#111937", text: "#e8ecff", dim: "#8899bb", border: "#2a3568" }
@@ -191,11 +188,13 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   return (
     <KeyboardAvoidingView style={[styles.root, { backgroundColor: colors.bg }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <TopBar appName="FreeSurf Reader" isLoggedIn={isLoggedIn} onSignIn={() => navigation.navigate("Auth")}
-          onSignOut={handleSignOut}
-          colors={{ text: colors.text, muted: colors.dim, card: colors.card, border: colors.border }}
+        <TopBar appName="FreeSurf Reader"
+          colors={{ text: colors.text, dim: colors.dim, card: colors.card, border: colors.border }}
           menuItems={[
             { label: "Recordings", onPress: () => navigation.navigate("History", { isDark }) },
+            { label: "Privacy Policy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
+            { label: "Terms of Service", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
+            { label: "Support", onPress: () => Linking.openURL("https://invoices.freesurf.tools/support") },
           ]}
         />
       </View>

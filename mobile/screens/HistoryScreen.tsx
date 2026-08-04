@@ -201,7 +201,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
   return (
     <View style={[s.root, { backgroundColor: c.bg }]}>
       <View style={[s.header, { backgroundColor: c.card, borderBottomColor: c.border }]}>
-        <TopBar appName="Recordings" isLoggedIn={false} onSignIn={() => {}} onSignOut={() => {}} colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }} menuItems={[{ label: "Dashboard", onPress: () => navigation.goBack() }]} />
+        <TopBar appName="Recordings" colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }} menuItems={[{ label: "Dashboard", onPress: () => navigation.goBack() }]} />
       </View>
       <FlatList data={recordings} keyExtractor={(r) => r.id} contentContainerStyle={s.list} removeClippedSubviews={false}
         ListEmptyComponent={<View style={s.empty}><Text style={[s.emptyT, { color: c.text }]}>No recordings yet</Text><Text style={[s.emptyS, { color: c.dim }]}>Generated audio will appear here</Text></View>}

@@ -3,9 +3,9 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 type Props = {
   appName: string;
-  onSignIn: () => void;
-  onSignOut: () => void;
-  isLoggedIn: boolean;
+  onSignIn?: () => void;
+  onSignOut?: () => void;
+  isLoggedIn?: boolean;
   menuItems?: { label: string; onPress: () => void }[];
   colors?: { text: string; dim: string; card: string; border: string };
 };
@@ -34,15 +34,17 @@ export default function TopBar({ appName, onSignIn, onSignOut, isLoggedIn, menuI
               </Pressable>
             ))}
             {menuItems && menuItems.length > 0 ? <View style={[styles.divider, { backgroundColor: c.border }]} /> : null}
-            {isLoggedIn ? (
-              <Pressable style={styles.item} onPress={() => { setOpen(false); onSignOut(); }}>
-                <Text style={[styles.signOut, { color: c.dim }]}>Log out</Text>
-              </Pressable>
-            ) : (
-              <Pressable style={styles.item} onPress={() => { setOpen(false); onSignIn(); }}>
-                <Text style={[styles.label, { color: c.text }]}>Sign in to sync</Text>
-              </Pressable>
-            )}
+            {onSignIn && onSignOut ? (
+              isLoggedIn ? (
+                <Pressable style={styles.item} onPress={() => { setOpen(false); onSignOut(); }}>
+                  <Text style={[styles.signOut, { color: c.dim }]}>Log out</Text>
+                </Pressable>
+              ) : (
+                <Pressable style={styles.item} onPress={() => { setOpen(false); onSignIn(); }}>
+                  <Text style={[styles.label, { color: c.text }]}>Sign in to sync</Text>
+                </Pressable>
+              )
+            ) : null}
           </View>
         </Pressable>
       </Modal>
