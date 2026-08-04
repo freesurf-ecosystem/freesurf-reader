@@ -113,6 +113,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
                   {isActive ? ` · part ${chunkIndex + 1}/${item.uris?.length || 1}` : ""}
                 </Text>
               </>
+            )}
           </View>
           <TouchableOpacity style={[s.menuBtn, { borderColor: c.border }]} onPress={async () => {
             const nextOpen = isMenuOpen ? null : item.id;
