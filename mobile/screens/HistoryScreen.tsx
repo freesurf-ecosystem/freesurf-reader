@@ -49,8 +49,6 @@ export default function HistoryScreen({ navigation, route }: Props) {
   }
   async function persist(u: Recording[]) { await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(u)); setRecordings(u); }
 
-  const [chunkIndex, setChunkIndex] = useState(0);
-
   async function togglePlay(item: Recording, startFrom = 0) {
     const uris = item.uris && item.uris.length > 0 ? item.uris : [item.uri];
     if (playingId === item.id && isPlaying) {
