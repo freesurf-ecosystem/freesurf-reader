@@ -7,7 +7,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import TopBar from "../components/TopBar";
-import { Play, Pause, Share2, X, EllipsisVertical, Sun, Moon } from "lucide-react-native";
+import { Play, Pause, Share2, X, EllipsisVertical } from "lucide-react-native";
 
 const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
 
@@ -27,214 +27,145 @@ function formatTime(ms: number) {
 export default function HistoryScreen({ navigation, route }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const isDark = route.params?.isDark ?? true;
-  const colors = isDark
+  const c = isDark
     ? { bg: "#0b1020", card: "#111937", text: "#e8ecff", dim: "#8899bb", border: "#2a3568", accent: "#5b8cff" }
     : { bg: "#f8f9fa", card: "#ffffff", text: "#111827", dim: "#6b7280", border: "#e5e7eb", accent: "#2563eb" };
 
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [positionMs, setPositionMs] = useState(0);
-  const [durationMs, setDurationMs] = useState(0);
+  const [pos, setPos] = useState(0);
+  const [dur, setDur] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
-  const progRef = useRef(0);
+  const progW = useRef(0);
 
   useFocusEffect(useCallback(() => { loadHistory(); return () => { soundRef.current?.unloadAsync().catch(() => {}); }; }, []));
 
   async function loadHistory() {
-    try {
-      const raw = await FileSystem.readAsStringAsync(HISTORY_PATH, { encoding: FileSystem.EncodingType.Utf8 }).catch(() => "[]");
-      setRecordings(JSON.parse(raw));
-    } catch {}
+    try { const raw = await FileSystem.readAsStringAsync(HISTORY_PATH, { encoding: FileSystem.EncodingType.Utf8 }).catch(() => "[]"); setRecordings(JSON.parse(raw)); } catch {}
   }
-
-  async function persistHistory(u: Recording[]) {
-    await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(u));
-    setRecordings(u);
-  }
+  async function persist(u: Recording[]) { await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(u)); setRecordings(u); }
 
   async function togglePlay(item: Recording) {
-    if (playingId === item.id) {
-      await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync();
-      soundRef.current = null; setPlayingId(null); setPositionMs(0); return;
-    }
+    if (playingId === item.id) { await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync(); soundRef.current = null; setPlayingId(null); setPos(0); return; }
     await soundRef.current?.stopAsync().catch(() => {});
     await soundRef.current?.unloadAsync().catch(() => {});
     const { sound } = await Audio.Sound.createAsync({ uri: item.uri }, { shouldPlay: true }, (s) => {
-      if (s.isLoaded) { setPositionMs(s.positionMillis); setDurationMs(s.durationMillis); if (s.didJustFinish) { setPlayingId(null); setPositionMs(0); } }
+      if (s.isLoaded) { setPos(s.positionMillis); setDur(s.durationMillis); if (s.didJustFinish) { setPlayingId(null); setPos(0); } }
     });
     soundRef.current = sound; setPlayingId(item.id);
-    (async () => { const st = await sound.getStatusAsync(); if (st.isLoaded) setDurationMs(st.durationMillis); })();
+    const st = await sound.getStatusAsync(); if (st.isLoaded) setDur(st.durationMillis);
   }
-
-  async function seek(item: Recording, locX: number) {
-    if (playingId !== item.id || !durationMs) return;
-    const ratio = Math.max(0, Math.min(1, locX / progRef.current));
-    await soundRef.current?.setPositionAsync(ratio * durationMs);
-    setPositionMs(ratio * durationMs);
-  }
-
-  async function jump(item: Recording, ms: number) {
-    if (playingId !== item.id) return;
-    const np = Math.max(0, Math.min(durationMs, positionMs + ms));
-    await soundRef.current?.setPositionAsync(np);
-    setPositionMs(np);
-  }
-
-  async function startRename(item: Recording) { setEditingId(item.id); setEditingTitle(item.title); }
+  async function seek(locX: number) { if (!dur) return; const ratio = Math.max(0, Math.min(1, locX / progW.current)); await soundRef.current?.setPositionAsync(ratio * dur); setPos(ratio * dur); }
+  async function jump(ms: number) { const np = Math.max(0, Math.min(dur, pos + ms)); await soundRef.current?.setPositionAsync(np); setPos(np); }
+  function startRename(item: Recording) { setEditingId(item.id); setEditingTitle(item.title); }
   function cancelRename() { setEditingId(null); setEditingTitle(""); }
-
-  async function saveRename() {
-    const id = editingId; if (!id || !editingTitle.trim()) { cancelRename(); return; }
-    const u = recordings.map(r => r.id === id ? { ...r, title: editingTitle.trim() } : r);
-    await persistHistory(u); cancelRename();
+  async function saveRename() { const id = editingId; if (!id || !editingTitle.trim()) { cancelRename(); return; } await persist(recordings.map(r => r.id === id ? { ...r, title: editingTitle.trim() } : r)); cancelRename(); }
+  async function shareItem(item: Recording) { if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(item.uri); }
+  function deleteItem(item: Recording) {
+    Alert.alert("Delete", `Delete "${item.title}"?`, [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: async () => { await persist(recordings.filter(r => r.id !== item.id)); if (playingId === item.id) { await soundRef.current?.unloadAsync(); setPlayingId(null); } } }]);
   }
 
-  async function shareItem(item: Recording) {
-    if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(item.uri);
-  }
+  function renderCard(item: Recording) {
+    const isActive = playingId === item.id;
+    const isEditing = editingId === item.id;
+    const isMenuOpen = openMenuId === item.id;
 
-  async function deleteItem(item: Recording) {
-    Alert.alert("Delete", `Delete "${item.title}"?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: async () => {
-          await persistHistory(recordings.filter(r => r.id !== item.id));
-          if (playingId === item.id) { await soundRef.current?.unloadAsync(); setPlayingId(null); }
-      }},
-    ]);
+    return (
+      <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={s.row}>
+          <TouchableOpacity style={[s.play, { borderColor: c.border, backgroundColor: isActive ? c.text : c.bg }]} onPress={() => togglePlay(item)}>
+            {isActive ? <Pause size={18} color={c.bg} /> : <Play size={18} color={c.text} />}
+          </TouchableOpacity>
+          <View style={s.info}>
+            {isEditing ? (
+              <TextInput style={[s.input, { color: c.text, borderColor: c.accent, backgroundColor: c.bg }]} value={editingTitle} onChangeText={setEditingTitle} onSubmitEditing={saveRename} onBlur={cancelRename} autoFocus selectTextOnFocus />
+            ) : (
+              <>
+                <Text style={[s.title, { color: c.text }]} numberOfLines={1}>{item.title}</Text>
+                <Text style={[s.meta, { color: c.dim }]}>{item.voice} · {formatDate(item.createdAt)}</Text>
+              </>
+            )}
+          </View>
+          <TouchableOpacity style={[s.menuBtn, { borderColor: c.border }]} onPress={() => setOpenMenuId(isMenuOpen ? null : item.id)}>
+            <EllipsisVertical size={18} color={c.text} />
+          </TouchableOpacity>
+        </View>
+
+        {isMenuOpen && (
+          <View>
+            {isActive && (
+              <View>
+                <View style={s.progRow}>
+                  <Text style={[s.time, { color: c.dim }]}>{formatTime(pos)}</Text>
+                  <TouchableOpacity style={[s.track, { backgroundColor: c.bg }]} onPress={(e) => seek(e.nativeEvent.locationX)} onLayout={(e) => { progW.current = e.nativeEvent.layout.width; }} activeOpacity={1}>
+                    <View style={[s.fill, { width: `${dur > 0 ? Math.min(1, pos / dur) * 100 : 0}%`, backgroundColor: c.accent }]} />
+                  </TouchableOpacity>
+                  <Text style={[s.time, { color: c.dim }]}>{formatTime(dur)}</Text>
+                </View>
+                <View style={s.ctrls}>
+                  <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => jump(-15000)}><Text style={[s.ctrlT, { color: c.text }]}>-15s</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => { setPos(0); soundRef.current?.setPositionAsync(0); }}><Text style={[s.ctrlT, { color: c.text }]}>Restart</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => jump(15000)}><Text style={[s.ctrlT, { color: c.text }]}>+15s</Text></TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            <View style={[s.actions, { borderTopColor: c.border }]}>
+              {isEditing ? (
+                <>
+                  <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={saveRename}><Text style={[s.actT, { color: c.text }]}>Save</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={cancelRename}><Text style={[s.actT, { color: c.text }]}>Cancel</Text></TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => startRename(item)}><Text style={[s.actT, { color: c.text }]}>Rename</Text></TouchableOpacity>
+              )}
+              <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => shareItem(item)}><Share2 size={16} color={c.text} /></TouchableOpacity>
+              <TouchableOpacity style={[s.del, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => deleteItem(item)}><X size={18} color="#f87171" /></TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+    );
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.bg }]}>
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <TopBar appName="Recordings" isLoggedIn={false} onSignIn={() => {}} onSignOut={() => {}}
-          colors={{ text: colors.text, dim: colors.dim, card: colors.card, border: colors.border }}
-          menuItems={[{ label: "Dashboard", onPress: () => navigation.goBack() }]}
-        />
+    <View style={[s.root, { backgroundColor: c.bg }]}>
+      <View style={[s.header, { backgroundColor: c.card, borderBottomColor: c.border }]}>
+        <TopBar appName="Recordings" isLoggedIn={false} onSignIn={() => {}} onSignOut={() => {}} colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }} menuItems={[{ label: "Dashboard", onPress: () => navigation.goBack() }]} />
       </View>
-
-      <FlatList
-        data={recordings}
-        keyExtractor={(r) => r.id}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No recordings yet</Text>
-            <Text style={[styles.emptySub, { color: colors.dim }]}>Generated audio will appear here</Text>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const isActive = playingId === item.id;
-          const isEditing = editingId === item.id;
-          const isMenuOpen = openMenuId === item.id;
-          const progress = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
-
-          return (
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.row}>
-                <TouchableOpacity style={[styles.playBtn, { borderColor: colors.border, backgroundColor: isActive ? colors.text : colors.bg }]}
-                  onPress={() => togglePlay(item)}>
-                  {isActive ? <Pause size={18} color={colors.bg} /> : <Play size={18} color={colors.text} />}
-                </TouchableOpacity>
-
-                <View style={styles.info}>
-                  {isEditing ? (
-                    <TextInput style={[styles.renameInput, { color: colors.text, borderColor: colors.accent, backgroundColor: colors.bg }]}
-                      value={editingTitle} onChangeText={setEditingTitle} onSubmitEditing={saveRename} onBlur={cancelRename} autoFocus selectTextOnFocus />
-                  ) : (
-                    <>
-                      <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-                      <Text style={[styles.meta, { color: colors.dim }]}>{item.voice} · {formatDate(item.createdAt)}</Text>
-                    </>
-                  )}
-                </View>
-
-                <TouchableOpacity style={[styles.menuBtn, { borderColor: colors.border }]}
-                  onPress={() => setOpenMenuId(isMenuOpen ? null : item.id)}>
-                  <EllipsisVertical size={18} color={colors.text} />
-                </TouchableOpacity>
-
-              {isMenuOpen && (
-              <>
-              {isActive && (
-                <>
-                  <View style={styles.progressRow}>
-                    <Text style={[styles.timeTxt, { color: colors.dim }]}>{formatTime(positionMs)}</Text>
-                    <TouchableOpacity style={[styles.progTrack, { backgroundColor: colors.bg }]}
-                      onPress={(e) => seek(item, e.nativeEvent.locationX)}
-                      onLayout={(e) => { progRef.current = e.nativeEvent.layout.width; }} activeOpacity={1}>
-                      <View style={[styles.progFill, { width: `${progress * 100}%`, backgroundColor: colors.accent }]} />
-                    </TouchableOpacity>
-                    <Text style={[styles.timeTxt, { color: colors.dim }]}>{formatTime(durationMs)}</Text>
-                  </View>
-                  <View style={styles.controlsRow}>
-                    <TouchableOpacity style={[styles.ctrlBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => jump(item, -15000)}>
-                      <Text style={[styles.ctrlText, { color: colors.text }]}>-15s</Text></TouchableOpacity>
-                    <TouchableOpacity style={[styles.ctrlBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => { setPositionMs(0); soundRef.current?.setPositionAsync(0); }}>
-                      <Text style={[styles.ctrlText, { color: colors.text }]}>Restart</Text></TouchableOpacity>
-                    <TouchableOpacity style={[styles.ctrlBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => jump(item, 15000)}>
-                      <Text style={[styles.ctrlText, { color: colors.text }]}>+15s</Text></TouchableOpacity>
-                  </View>
-                </>
-              )}
-
-              <View style={[styles.actionsRow, { borderTopColor: colors.border }]}>
-                {isEditing ? (
-                  <>
-                    <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={saveRename}>
-                      <Text style={[styles.actionText, { color: colors.text }]}>Save</Text></TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={cancelRename}>
-                      <Text style={[styles.actionText, { color: colors.text }]}>Cancel</Text></TouchableOpacity>
-                  </>
-                ) : (
-                  <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => startRename(item)}>
-                    <Text style={[styles.actionText, { color: colors.text }]}>Rename</Text></TouchableOpacity>
-                )}
-                <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => shareItem(item)}>
-                  <Share2 size={16} color={colors.text} />
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.delBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => deleteItem(item)}>
-                  <X size={18} color="#f87171" />
-                </TouchableOpacity>
-              </View>
-              </>
-              )}
-            </View>
-          );
-        }}
-      />
+      <FlatList data={recordings} keyExtractor={(r) => r.id} contentContainerStyle={s.list}
+        ListEmptyComponent={<View style={s.empty}><Text style={[s.emptyT, { color: c.text }]}>No recordings yet</Text><Text style={[s.emptyS, { color: c.dim }]}>Generated audio will appear here</Text></View>}
+        renderItem={({ item }) => renderCard(item)} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingTop: 12, paddingHorizontal: 20, paddingBottom: 8, borderBottomWidth: 1 },
   list: { padding: 16, paddingBottom: 48 },
   empty: { alignItems: "center", paddingTop: 80 },
-  emptyTitle: { fontSize: 18, fontWeight: "600", marginBottom: 8 },
-  emptySub: { fontSize: 14, textAlign: "center" },
-
+  emptyT: { fontSize: 18, fontWeight: "600", marginBottom: 8 },
+  emptyS: { fontSize: 14, textAlign: "center" },
   card: { borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1 },
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
-  playBtn: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  play: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   info: { flex: 1 },
-  menuBtn: { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   title: { fontSize: 15, fontWeight: "600", marginBottom: 2 },
-  renameInput: { fontSize: 14, fontWeight: "600", borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   meta: { fontSize: 12 },
-
-  progressRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 10 },
-  timeTxt: { fontSize: 11, fontVariant: ["tabular-nums"], minWidth: 36 },
-  progTrack: { flex: 1, height: 6, borderRadius: 3, overflow: "hidden" },
-  progFill: { height: "100%", borderRadius: 3 },
-  controlsRow: { flexDirection: "row", gap: 8, justifyContent: "center", marginBottom: 4 },
-  ctrlBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1 },
-  ctrlText: { fontSize: 13, fontWeight: "500" },
-
-  actionsRow: { flexDirection: "row", gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  actionBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, alignItems: "center" },
-  actionText: { fontSize: 13, fontWeight: "500" },
-  delBtn: { width: 42, height: 42, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  input: { fontSize: 14, fontWeight: "600", borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  menuBtn: { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  progRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 10 },
+  time: { fontSize: 11, minWidth: 36 },
+  track: { flex: 1, height: 6, borderRadius: 3, overflow: "hidden" },
+  fill: { height: "100%", borderRadius: 3 },
+  ctrls: { flexDirection: "row", gap: 8, justifyContent: "center", marginBottom: 4 },
+  ctrl: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1 },
+  ctrlT: { fontSize: 13, fontWeight: "500" },
+  actions: { flexDirection: "row", gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  act: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, alignItems: "center" },
+  actT: { fontSize: 13, fontWeight: "500" },
+  del: { width: 42, height: 42, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
 });
