@@ -114,8 +114,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
                 <Text style={[s.title, { color: c.text }]} numberOfLines={1}>{item.title}</Text>
                 <Text style={[s.meta, { color: c.dim }]}>
                   {item.voice} · {formatDate(item.createdAt)}
-                  {item.uris && item.uris.length > 1 ? ` · ${item.uris.length} parts` : ""}
-                  {isActive ? ` · part ${chunkIndex + 1}/${item.uris?.length || 1}` : ""}
+                  {isActive && (item.uris?.length || 0) > 1 ? ` · part ${chunkIndex + 1}/${item.uris?.length}` : ""}
                 </Text>
               </>
             )}
