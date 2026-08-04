@@ -75,7 +75,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
     return (
       <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
         <View style={s.row}>
-          <TouchableOpacity style={[s.play, { borderColor: c.border, backgroundColor: isActive ? c.text : c.bg }]} onPress={() => togglePlay(item)}>
+          <TouchableOpacity style={[s.play, { borderColor: c.border, backgroundColor: isActive ? c.text : c.bg }]} onPress={() => { setOpenMenuId(null); togglePlay(item); }}>
             {isActive ? <Pause size={18} color={c.bg} /> : <Play size={18} color={c.text} />}
           </TouchableOpacity>
           <View style={s.info}>

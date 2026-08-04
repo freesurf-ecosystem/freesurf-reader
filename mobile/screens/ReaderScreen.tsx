@@ -50,7 +50,6 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   const [selectedVoice, setSelectedVoice] = useState<Voice>(VOICES[0]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [genProgress, setGenProgress] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [showVoicePicker, setShowVoicePicker] = useState(false);
   const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
@@ -90,7 +89,6 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
     if (isPlaying || isGenerating) { await stopPlayback(); return; }
 
     setIsGenerating(true);
-    setGenProgress("");
     try {
       const chunks = chunkText(content);
       console.log(`[Reader] Text ${content.length} chars → ${chunks.length} chunks`);
@@ -99,7 +97,6 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       const batchId = Date.now();
       const uris: string[] = [];
       for (let i = 0; i < chunks.length; i++) {
-        setGenProgress(`Chunk ${i + 1}/${chunks.length}`);
         try {
           const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
           const fname = `reader-${batchId}-${i}.wav`;
@@ -124,7 +121,8 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       setIsGenerating(false);
 
       const hist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
-      hist.unshift({ title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, uris, createdAt: Date.now() });
+      const entryId = `${batchId}-${uris.length}`;
+      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, createdAt: Date.now() });
       await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(hist.slice(0, 50)));
       setHistoryCount(Math.min(hist.length, 50));
       setSavedToast(true);
@@ -179,7 +177,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       </ScrollView>
 
       <View style={[styles.readerBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-        {savedToast && <View style={styles.toast}><Text style={styles.toastText}>✓ Saved to Recordings</Text></View>}
+        {savedToast && <View style={[styles.toast, { backgroundColor: colors.border }]}><Text style={[styles.toastText, { color: colors.text }]}>✓ Saved to Recordings</Text></View>}
 
         <View style={styles.barRow}>
           <TouchableOpacity style={styles.barBtn} onPress={handleImport} disabled={isImporting}>
@@ -194,8 +192,8 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
             <TouchableOpacity style={[styles.playBtn, { backgroundColor: isDark ? "#e8ecff15" : "#1a1a2e10" }]}
               onPress={handleRead}>
-              <Text style={[styles.playBtnText, { color: colors.text }, (isPlaying || isGenerating) && styles.playBtnTextActive]}>
-                {isGenerating ? (genProgress || `Preparing${timeEstimate ? ` ${timeEstimate}` : ""}`) : isPlaying ? "Stop" : "Read Aloud"}
+              <Text style={[styles.playBtnText, { color: colors.text }]}>
+                {isGenerating ? `Preparing${timeEstimate ? ` ${timeEstimate}` : "..."}` : isPlaying ? "Stop" : "Read Aloud"}
               </Text>
             </TouchableOpacity>
 
