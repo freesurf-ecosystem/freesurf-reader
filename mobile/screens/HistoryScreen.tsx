@@ -45,7 +45,10 @@ export default function HistoryScreen({ navigation, route }: Props) {
   useFocusEffect(useCallback(() => { loadHistory(); return () => { soundRef.current?.unloadAsync().catch(() => {}); }; }, []));
 
   async function loadHistory() {
-    try { const raw = await FileSystem.readAsStringAsync(HISTORY_PATH, { encoding: FileSystem.EncodingType.Utf8 }).catch(() => "[]"); const r = JSON.parse(raw); setRecordings(r); console.log(`[History] Loaded ${r.length} recordings, first has uris: ${!!r[0]?.uris}, uris length: ${r[0]?.uris?.length || 0}`); } catch {}
+    try {
+      const raw = await FileSystem.readAsStringAsync(HISTORY_PATH, { encoding: FileSystem.EncodingType.Utf8 }).catch(() => "[]");
+      try { const r = JSON.parse(raw); setRecordings(r); } catch { setRecordings([]); }
+    } catch { setRecordings([]); }
   }
   async function persist(u: Recording[]) { await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(u)); setRecordings(u); }
 

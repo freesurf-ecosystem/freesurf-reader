@@ -17,6 +17,14 @@ type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader
 
 const MIN_INPUT_HEIGHT = 280;
 const MAX_CHUNK = 4000;
+const HISTORY_PATH = AUDIO_DIR + "history.json";
+
+async function safeWriteHistory(data: unknown) {
+  const tmp = HISTORY_PATH + ".tmp";
+  await FileSystem.writeAsStringAsync(tmp, JSON.stringify(data));
+  await FileSystem.deleteAsync(HISTORY_PATH, { idempotent: true }).catch(() => {});
+  await FileSystem.moveAsync({ from: tmp, to: HISTORY_PATH });
+}
 
 function chunkText(t: string): string[] {
   const text = t.trim();
@@ -67,7 +75,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
   useEffect(() => {
     ensureDir().then(() => {
-      FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j =>
+      FileSystem.readAsStringAsync(HISTORY_PATH).then(j =>
         setHistoryCount(JSON.parse(j).length)
       ).catch(() => {});
     });
@@ -115,9 +123,9 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
       // Save placeholder entry immediately (toast + Recordings visibility)
       const entryId = `${batchId}-0`;
-      const hist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
+      const hist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
       hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, uris: [firstUri], createdAt: Date.now() });
-      await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(hist.slice(0, 50)));
+      await safeWriteHistory(hist.slice(0, 50));
       setHistoryCount(Math.min(hist.length, 50));
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 3000);
@@ -138,10 +146,10 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       console.log(`[Reader] All done — ${uris.length}/${chunks.length} chunks saved`);
 
       // Update history with all URIs
-      const updatedHist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
+      const updatedHist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
       const idx = updatedHist.findIndex((r: {id: string}) => r.id === entryId);
       if (idx >= 0) updatedHist[idx].uris = uris;
-      await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(updatedHist));
+      await safeWriteHistory(updatedHist);
     } catch (e: any) {
       setIsGenerating(false);
       Alert.alert("Error", e.message || "Failed to generate audio.");
