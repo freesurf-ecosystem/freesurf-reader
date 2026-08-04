@@ -20,21 +20,22 @@ const MAX_CHUNK = 4000;
 
 function chunkText(t: string): string[] {
   const text = t.trim();
+  if (!text) return [];
   if (text.length <= MAX_CHUNK) return [text];
   const chunks: string[] = [];
   let remaining = text;
-  while (remaining.length > MAX_CHUNK) {
+  while (remaining.length > 0) {
+    if (remaining.length <= MAX_CHUNK) { chunks.push(remaining.trim()); break; }
     let brk = remaining.lastIndexOf(". ", MAX_CHUNK);
-    if (brk < 500) brk = remaining.lastIndexOf("? ", MAX_CHUNK);
-    if (brk < 500) brk = remaining.lastIndexOf("! ", MAX_CHUNK);
-    if (brk < 500) brk = remaining.lastIndexOf("\n", MAX_CHUNK);
-    if (brk < 500) brk = remaining.lastIndexOf(" ", MAX_CHUNK);
-    if (brk < 500) brk = MAX_CHUNK;
+    if (brk < 300) brk = remaining.lastIndexOf("? ", MAX_CHUNK);
+    if (brk < 300) brk = remaining.lastIndexOf("! ", MAX_CHUNK);
+    if (brk < 300) brk = remaining.lastIndexOf("\n", MAX_CHUNK);
+    if (brk < 300) brk = remaining.lastIndexOf(" ", MAX_CHUNK);
+    if (brk < 300) brk = MAX_CHUNK;
     chunks.push(remaining.slice(0, brk + 1).trim());
     remaining = remaining.slice(brk + 1).trim();
   }
-  if (remaining) chunks.push(remaining);
-  return chunks.filter(Boolean);
+  return chunks.filter(s => s.length > 10);
 }
 
 function concatWavChunks(b64Chunks: string[]): string {
@@ -240,7 +241,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingTop: 52, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1 },
+  header: { paddingTop: 12, paddingHorizontal: 20, paddingBottom: 8, borderBottomWidth: 1 },
 
   body: { flex: 1 },
   bodyContent: { padding: 24, paddingBottom: 24 },
