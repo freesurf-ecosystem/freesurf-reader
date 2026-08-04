@@ -59,7 +59,14 @@ function concatWavChunks(b64Chunks: string[]): string {
   out.set([0x64,0x61,0x74,0x61],36); dv.setUint32(40,pcmTotal,true);
   let off = 44;
   for (const r of rawChunks) { out.set(r.slice(44), off); off += r.length - 44; }
-  return btoa(String.fromCharCode(...out));
+
+  // Encode in chunks to avoid stack overflow on large arrays
+  const chunkSize = 8192;
+  const parts: string[] = [];
+  for (let i = 0; i < out.length; i += chunkSize) {
+    parts.push(String.fromCharCode(...out.slice(i, i + chunkSize)));
+  }
+  return btoa(parts.join(""));
 }
 const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 
