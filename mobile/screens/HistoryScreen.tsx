@@ -1,206 +1,116 @@
-import React, { useState, useCallback, useRef } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  StyleSheet,
-  FlatList,
-  Alert,
-} from "react-native";
+import React, { useCallback, useRef, useState } from "react";
+import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
+import TopBar from "../components/TopBar";
+import { Play, Pause, Share2, X, Download } from "lucide-react-native";
 
 const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
 
-interface Recording {
-  id: string;
-  title: string;
-  text: string;
-  voice: string;
-  uri: string;
-  createdAt: number;
-}
+interface Recording { id: string; title: string; text: string; voice: string; uri: string; createdAt: number; }
 
 type Props = NativeStackScreenProps<RootStackParamList, "History">;
 
-const sanitizeFileName = (value: string) =>
-  String(value || "recording")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "recording";
+function formatDate(ts: number) {
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+function formatTime(ms: number) {
+  if (!ms) return "0:00";
+  const t = Math.floor(ms / 1000);
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+}
 
 export default function HistoryScreen({ navigation, route }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
-  const soundRef = useRef<Audio.Sound | null>(null);
   const isDark = route.params?.isDark ?? true;
-
   const colors = isDark
     ? { bg: "#0b1020", card: "#111937", text: "#e8ecff", muted: "#5f6b7a", border: "#2a3568", accent: "#5b8cff" }
     : { bg: "#f8f9fa", card: "#ffffff", text: "#1a1a2e", muted: "#6b7280", border: "#e5e7eb", accent: "#2563eb" };
 
-  useFocusEffect(
-    useCallback(() => {
-      loadHistory();
-      return () => {
-        soundRef.current?.unloadAsync().catch(() => {});
-        soundRef.current = null;
-      };
-    }, [])
-  );
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [positionMs, setPositionMs] = useState(0);
+  const [durationMs, setDurationMs] = useState(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const progRef = useRef(0);
+
+  useFocusEffect(useCallback(() => { loadHistory(); return () => { soundRef.current?.unloadAsync().catch(() => {}); }; }, []));
 
   async function loadHistory() {
     try {
-      const raw = await FileSystem.readAsStringAsync(
-        HISTORY_PATH,
-        { encoding: FileSystem.EncodingType.Utf8 }
-      ).catch(() => "[]");
+      const raw = await FileSystem.readAsStringAsync(HISTORY_PATH, { encoding: FileSystem.EncodingType.Utf8 }).catch(() => "[]");
       setRecordings(JSON.parse(raw));
     } catch {}
   }
 
-  async function persistHistory(updated: Recording[]) {
-    await FileSystem.writeAsStringAsync(
-      HISTORY_PATH,
-      JSON.stringify(updated),
-      { encoding: FileSystem.EncodingType.Utf8 }
-    );
-    setRecordings(updated);
+  async function persistHistory(u: Recording[]) {
+    await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(u));
+    setRecordings(u);
   }
 
-  async function togglePlayback(recording: Recording) {
-    if (playingId === recording.id) {
-      await soundRef.current?.stopAsync();
-      await soundRef.current?.unloadAsync();
-      soundRef.current = null;
-      setPlayingId(null);
-      return;
+  async function togglePlay(item: Recording) {
+    if (playingId === item.id) {
+      await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync();
+      soundRef.current = null; setPlayingId(null); setPositionMs(0); return;
     }
-
-    await soundRef.current?.stopAsync();
-    await soundRef.current?.unloadAsync();
-
-    const info = await FileSystem.getInfoAsync(recording.uri);
-    if (!info.exists) {
-      const updated = recordings.filter((r) => r.id !== recording.id);
-      await persistHistory(updated);
-      return;
-    }
-
-    try {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-      });
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: recording.uri },
-        { shouldPlay: true },
-        (status) => {
-          if (status.isLoaded && status.didJustFinish) {
-            setPlayingId(null);
-          }
-        }
-      );
-
-      soundRef.current = sound;
-      setPlayingId(recording.id);
-    } catch {
-      setPlayingId(null);
-    }
+    await soundRef.current?.stopAsync().catch(() => {});
+    await soundRef.current?.unloadAsync().catch(() => {});
+    const { sound } = await Audio.Sound.createAsync({ uri: item.uri }, { shouldPlay: true }, (s) => {
+      if (s.isLoaded) { setPositionMs(s.positionMillis); setDurationMs(s.durationMillis); if (s.didJustFinish) { setPlayingId(null); setPositionMs(0); } }
+    });
+    soundRef.current = sound; setPlayingId(item.id);
+    (async () => { const st = await sound.getStatusAsync(); if (st.isLoaded) setDurationMs(st.durationMillis); })();
   }
 
-  async function deleteRecording(recording: Recording) {
-    await FileSystem.deleteAsync(recording.uri, { idempotent: true }).catch(() => {});
-    const updated = recordings.filter((r) => r.id !== recording.id);
-    await persistHistory(updated);
+  async function seek(item: Recording, locX: number) {
+    if (playingId !== item.id || !durationMs) return;
+    const ratio = Math.max(0, Math.min(1, locX / progRef.current));
+    await soundRef.current?.setPositionAsync(ratio * durationMs);
+    setPositionMs(ratio * durationMs);
   }
 
-  async function shareRecording(recording: Recording) {
-    const canShare = await Sharing.isAvailableAsync();
-    if (canShare) {
-      await Sharing.shareAsync(recording.uri, {
-        mimeType: "audio/mpeg",
-        dialogTitle: recording.title,
-      });
-    }
+  async function jump(item: Recording, ms: number) {
+    if (playingId !== item.id) return;
+    const np = Math.max(0, Math.min(durationMs, positionMs + ms));
+    await soundRef.current?.setPositionAsync(np);
+    setPositionMs(np);
   }
 
-  async function startRename(recording: Recording) {
-    setEditingId(recording.id);
-    setEditingTitle(recording.title);
-  }
+  async function startRename(item: Recording) { setEditingId(item.id); setEditingTitle(item.title); }
+  function cancelRename() { setEditingId(null); setEditingTitle(""); }
 
   async function saveRename() {
-    if (!editingId || !editingTitle.trim()) {
-      setEditingId(null);
-      setEditingTitle("");
-      return;
-    }
-
-    const entry = recordings.find((r) => r.id === editingId);
-    if (!entry) {
-      setEditingId(null);
-      setEditingTitle("");
-      return;
-    }
-
-    const newTitle = editingTitle.trim();
-    const oldStem = sanitizeFileName(entry.title);
-    const newStem = sanitizeFileName(newTitle);
-    let newUri = entry.uri;
-
-    if (oldStem !== newStem && entry.uri) {
-      const dir = entry.uri.substring(0, entry.uri.lastIndexOf("/") + 1);
-      newUri = `${dir}${newStem}-${Date.now()}.mp3`;
-      try {
-        const info = await FileSystem.getInfoAsync(entry.uri);
-        if (info.exists) {
-          await FileSystem.moveAsync({ from: entry.uri, to: newUri });
-        }
-      } catch {}
-    }
-
-    const updated = recordings.map((r) =>
-      r.id === editingId ? { ...r, title: newTitle, uri: newUri } : r
-    );
-    await persistHistory(updated);
-
-    setEditingId(null);
-    setEditingTitle("");
+    const id = editingId; if (!id || !editingTitle.trim()) { cancelRename(); return; }
+    const u = recordings.map(r => r.id === id ? { ...r, title: editingTitle.trim() } : r);
+    await persistHistory(u); cancelRename();
   }
 
-  function cancelRename() {
-    setEditingId(null);
-    setEditingTitle("");
+  async function shareItem(item: Recording) {
+    if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(item.uri);
   }
 
-  function formatDate(ts: number) {
-    const d = new Date(ts);
-    return d.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  async function deleteItem(item: Recording) {
+    Alert.alert("Delete", `Delete "${item.title}"?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: async () => {
+          await persistHistory(recordings.filter(r => r.id !== item.id));
+          if (playingId === item.id) { await soundRef.current?.unloadAsync(); setPlayingId(null); }
+      }},
+    ]);
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={[styles.back, { color: colors.accent }]}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Recordings</Text>
-        <View style={{ width: 60 }} />
+        <TopBar appName="Recordings" isLoggedIn={false} onSignIn={() => {}} onSignOut={() => {}}
+          colors={{ text: colors.text, muted: colors.muted, card: colors.card, border: colors.border }}
+          menuItems={[{ label: "Dashboard", onPress: () => navigation.goBack() }]}
+        />
       </View>
 
       <FlatList
@@ -209,116 +119,111 @@ export default function HistoryScreen({ navigation, route }: Props) {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>🎧</Text>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>No recordings yet</Text>
-            <Text style={[styles.emptySub, { color: colors.muted }]}>
-              Generated audio will appear here automatically
-            </Text>
+            <Text style={[styles.emptySub, { color: colors.muted }]}>Generated audio will appear here</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <TouchableOpacity
-              style={styles.itemMain}
-              onPress={() => togglePlayback(item)}
-            >
-              <Text style={styles.playIcon}>
-                {playingId === item.id ? "⏸" : "▶️"}
-              </Text>
-              <View style={styles.itemInfo}>
-                {editingId === item.id ? (
-                  <TextInput
-                    style={[styles.renameInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-                    value={editingTitle}
-                    onChangeText={setEditingTitle}
-                    onSubmitEditing={saveRename}
-                    onBlur={cancelRename}
-                    autoFocus
-                    selectTextOnFocus
-                    placeholder="Recording name"
-                    placeholderTextColor={colors.muted}
-                  />
-                ) : (
-                  <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                )}
-                <Text style={[styles.itemMeta, { color: colors.muted }]}>
-                  {item.voice} · {formatDate(item.createdAt)}
-                </Text>
-              </View>
-            </TouchableOpacity>
+        renderItem={({ item }) => {
+          const isActive = playingId === item.id;
+          const isEditing = editingId === item.id;
+          const progress = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
 
-            <View style={styles.itemActions}>
-              {editingId === item.id ? (
-                <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border }]} onPress={saveRename}>
-                  <Text style={[styles.actionBtnText, { color: colors.accent }]}>Save</Text>
+          return (
+            <View key={item.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.row}>
+                <TouchableOpacity style={[styles.playBtn, { borderColor: colors.border, backgroundColor: isActive ? colors.text : colors.bg }]}
+                  onPress={() => togglePlay(item)}>
+                  {isActive ? <Pause size={18} color={isActive ? colors.bg : colors.text} /> : <Play size={18} color={colors.text} />}
                 </TouchableOpacity>
-              ) : (
-                <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border }]} onPress={() => startRename(item)}>
-                  <Text style={[styles.actionBtnText, { color: colors.text }]}>Rename</Text>
-                </TouchableOpacity>
+
+                <View style={styles.info}>
+                  {isEditing ? (
+                    <TextInput style={[styles.renameInput, { color: colors.text, borderColor: colors.accent, backgroundColor: colors.bg }]}
+                      value={editingTitle} onChangeText={setEditingTitle} onSubmitEditing={saveRename} onBlur={cancelRename} autoFocus selectTextOnFocus />
+                  ) : (
+                    <>
+                      <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+                      <Text style={[styles.meta, { color: colors.muted }]}>{item.voice} · {formatDate(item.createdAt)}</Text>
+                    </>
+                  )}
+                </View>
+              </View>
+
+              {isActive && (
+                <>
+                  <View style={styles.progressRow}>
+                    <Text style={[styles.timeTxt, { color: colors.muted }]}>{formatTime(positionMs)}</Text>
+                    <TouchableOpacity style={[styles.progTrack, { backgroundColor: colors.bg }]}
+                      onPress={(e) => seek(item, e.nativeEvent.locationX)}
+                      onLayout={(e) => { progRef.current = e.nativeEvent.layout.width; }} activeOpacity={1}>
+                      <View style={[styles.progFill, { width: `${progress * 100}%`, backgroundColor: colors.accent }]} />
+                    </TouchableOpacity>
+                    <Text style={[styles.timeTxt, { color: colors.muted }]}>{formatTime(durationMs)}</Text>
+                  </View>
+                  <View style={styles.controlsRow}>
+                    <TouchableOpacity style={[styles.ctrlBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => jump(item, -15000)}>
+                      <Text style={[styles.ctrlText, { color: colors.text }]}>-15s</Text></TouchableOpacity>
+                    <TouchableOpacity style={[styles.ctrlBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => { setPositionMs(0); soundRef.current?.setPositionAsync(0); }}>
+                      <Text style={[styles.ctrlText, { color: colors.text }]}>Restart</Text></TouchableOpacity>
+                    <TouchableOpacity style={[styles.ctrlBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => jump(item, 15000)}>
+                      <Text style={[styles.ctrlText, { color: colors.text }]}>+15s</Text></TouchableOpacity>
+                  </View>
+                </>
               )}
-              <TouchableOpacity
-                style={[styles.actionBtn, { borderColor: colors.border }]}
-                onPress={() => shareRecording(item)}
-              >
-                <Text style={[styles.actionBtnText, { color: colors.text }]}>Share</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, { borderColor: colors.border }]}
-                onPress={() => {
-                  Alert.alert(
-                    "Delete recording",
-                    `Delete "${item.title}"?`,
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Delete",
-                        style: "destructive",
-                        onPress: () => deleteRecording(item),
-                      },
-                    ]
-                  );
-                }}
-              >
-                <Text style={[styles.actionBtnText, { color: "#f87171" }]}>Del</Text>
-              </TouchableOpacity>
+
+              <View style={[styles.actionsRow, { borderTopColor: colors.border }]}>
+                {isEditing ? (
+                  <>
+                    <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={saveRename}>
+                      <Text style={[styles.actionText, { color: colors.text }]}>Save</Text></TouchableOpacity>
+                    <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={cancelRename}>
+                      <Text style={[styles.actionText, { color: colors.text }]}>Cancel</Text></TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => startRename(item)}>
+                    <Text style={[styles.actionText, { color: colors.text }]}>Rename</Text></TouchableOpacity>
+                )}
+                <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => shareItem(item)}>
+                  <Share2 size={16} color={colors.text} />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.delBtn, { borderColor: colors.border, backgroundColor: colors.bg }]} onPress={() => deleteItem(item)}>
+                  <X size={18} color="#f87171" />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
+          );
+        }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    padding: 16, paddingTop: 56, borderBottomWidth: 1,
-  },
-  back: { fontSize: 15, fontWeight: "500" },
-  headerTitle: { fontSize: 16, fontWeight: "700" },
-
+  root: { flex: 1 },
+  header: { paddingTop: 52, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1 },
   list: { padding: 16, paddingBottom: 48 },
   empty: { alignItems: "center", paddingTop: 80 },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 18, fontWeight: "600", marginBottom: 8 },
   emptySub: { fontSize: 14, textAlign: "center" },
 
-  item: { borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1 },
-  itemMain: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
-  playIcon: { fontSize: 20, marginRight: 12 },
-  itemInfo: { flex: 1 },
-  itemTitle: { fontSize: 15, fontWeight: "600" },
-  itemMeta: { fontSize: 12, marginTop: 2 },
-  renameInput: {
-    fontSize: 15, fontWeight: "600", borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1,
-  },
+  card: { borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1 },
+  row: { flexDirection: "row", alignItems: "center", gap: 10 },
+  playBtn: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  info: { flex: 1 },
+  title: { fontSize: 15, fontWeight: "600", marginBottom: 2 },
+  renameInput: { fontSize: 14, fontWeight: "600", borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  meta: { fontSize: 12 },
 
-  itemActions: { flexDirection: "row", justifyContent: "flex-end", gap: 4 },
-  actionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  actionBtnText: { fontSize: 13, fontWeight: "500" },
+  progressRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 10 },
+  timeTxt: { fontSize: 11, fontVariant: ["tabular-nums"], minWidth: 36 },
+  progTrack: { flex: 1, height: 6, borderRadius: 3, overflow: "hidden" },
+  progFill: { height: "100%", borderRadius: 3 },
+  controlsRow: { flexDirection: "row", gap: 8, justifyContent: "center", marginBottom: 4 },
+  ctrlBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1 },
+  ctrlText: { fontSize: 13, fontWeight: "500" },
+
+  actionsRow: { flexDirection: "row", gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  actionBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, alignItems: "center" },
+  actionText: { fontSize: 13, fontWeight: "500" },
+  delBtn: { width: 42, height: 42, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
 });
