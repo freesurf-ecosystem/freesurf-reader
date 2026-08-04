@@ -17,57 +17,6 @@ type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader
 
 const MIN_INPUT_HEIGHT = 280;
 const MAX_CHUNK = 4000;
-
-function chunkText(t: string): string[] {
-  const text = t.trim();
-  if (!text) return [];
-  if (text.length <= MAX_CHUNK) return [text];
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= MAX_CHUNK) { chunks.push(remaining.trim()); break; }
-    let brk = remaining.lastIndexOf(". ", MAX_CHUNK);
-    if (brk < 300) brk = remaining.lastIndexOf("? ", MAX_CHUNK);
-    if (brk < 300) brk = remaining.lastIndexOf("! ", MAX_CHUNK);
-    if (brk < 300) brk = remaining.lastIndexOf("\n", MAX_CHUNK);
-    if (brk < 300) brk = remaining.lastIndexOf(" ", MAX_CHUNK);
-    if (brk < 300) brk = MAX_CHUNK;
-    chunks.push(remaining.slice(0, brk + 1).trim());
-    remaining = remaining.slice(brk + 1).trim();
-  }
-  return chunks.filter(s => s.length > 10);
-}
-
-function concatWavChunks(b64Chunks: string[]): string {
-  if (b64Chunks.length === 0) return "";
-  if (b64Chunks.length === 1) return b64Chunks[0];
-  const rawChunks = b64Chunks.map(b64 => {
-    const bin = atob(b64); const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return bytes;
-  });
-  const v = new DataView(rawChunks[0].buffer);
-  const sampleRate = v.getUint32(24, true), bits = v.getUint16(34, true), ch = v.getUint16(22, true);
-  const byteRate = sampleRate * ch * (bits / 8), blockAlign = ch * (bits / 8);
-  const pcmTotal = rawChunks.reduce((s, r) => s + r.length - 44, 0);
-  const out = new Uint8Array(44 + pcmTotal); const dv = new DataView(out.buffer);
-  out.set([0x52,0x49,0x46,0x46],0); dv.setUint32(4,36+pcmTotal,true);
-  out.set([0x57,0x41,0x56,0x45],8); out.set([0x66,0x6D,0x74,0x20],12);
-  dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,ch,true);
-  dv.setUint32(24,sampleRate,true); dv.setUint32(28,byteRate,true);
-  dv.setUint16(32,blockAlign,true); dv.setUint16(34,bits,true);
-  out.set([0x64,0x61,0x74,0x61],36); dv.setUint32(40,pcmTotal,true);
-  let off = 44;
-  for (const r of rawChunks) { out.set(r.slice(44), off); off += r.length - 44; }
-
-  // Encode in chunks to avoid stack overflow on large arrays
-  const chunkSize = 8192;
-  const parts: string[] = [];
-  for (let i = 0; i < out.length; i += chunkSize) {
-    parts.push(String.fromCharCode(...out.slice(i, i + chunkSize)));
-  }
-  return btoa(parts.join(""));
-}
 const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 
 async function ensureDir() {
@@ -107,8 +56,9 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   const timeEstimate = useMemo(() => {
     const len = (text || "").trim().length;
     if (!len) return null;
-    const sec = Math.ceil(len * 3 / 1000) + 15;
-    const m = Math.floor(sec / 60), s = sec % 60;
+    const chunks = Math.max(1, Math.ceil(len / MAX_CHUNK));
+    const totalSec = Math.ceil(len * 3 / 1000) + (chunks * 15);
+    const m = Math.floor(totalSec / 60), s = totalSec % 60;
     return m > 0 ? `~${m}m ${s}s` : `~${s}s`;
   }, [text]);
 
@@ -119,15 +69,21 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
     setIsGenerating(true);
     try {
-      const ttsText = content.length > MAX_CHUNK ? content.slice(0, MAX_CHUNK) : content;
-      const b64 = await textToSpeech(ttsText, selectedVoice.voice);
-      await ensureDir();
-      const fname = `reader-${Date.now()}.wav`;
-      const uri = AUDIO_DIR + fname;
-      await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
+      const chunks = chunkText(content);
 
+      await ensureDir();
+      const uris: string[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
+        const fname = `reader-${Date.now()}-${i}.wav`;
+        const uri = AUDIO_DIR + fname;
+        await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
+        uris.push(uri);
+      }
+
+      const firstUri = uris[0];
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
-      const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true }, (status) => {
+      const { sound } = await Audio.Sound.createAsync({ uri: firstUri }, { shouldPlay: true }, (status) => {
         if (status.isLoaded && status.didJustFinish) { setIsPlaying(false); sound.unloadAsync().catch(() => {}); }
       });
       soundRef.current = sound;
@@ -135,7 +91,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       setIsGenerating(false);
 
       const hist = await FileSystem.readAsStringAsync(AUDIO_DIR + "history.json").then(j => JSON.parse(j)).catch(() => []);
-      hist.unshift({ title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri, createdAt: Date.now() });
+      hist.unshift({ title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, createdAt: Date.now() });
       await FileSystem.writeAsStringAsync(AUDIO_DIR + "history.json", JSON.stringify(hist.slice(0, 50)));
       setHistoryCount(Math.min(hist.length, 50));
       setSavedToast(true);
