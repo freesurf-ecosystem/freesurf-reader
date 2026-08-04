@@ -11,6 +11,7 @@ import type { RootStackParamList } from "../App";
 import { textToSpeech, VOICES, type Voice } from "../lib/tts";
 import { supabase } from "../lib/supabase";
 import TopBar from "../components/TopBar";
+import { Sun, Moon, FileText } from "lucide-react-native";
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; isLoggedIn: boolean };
 
@@ -117,9 +118,9 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TopBar appName="FreeSurf Reader" isLoggedIn={isLoggedIn} onSignIn={() => navigation.navigate("Auth")}
           onSignOut={handleSignOut}
+          colors={{ text: colors.text, muted: colors.muted, card: colors.card, border: colors.border }}
           menuItems={[
             { label: `Saved (${historyCount})`, onPress: () => navigation.navigate("History") },
-            { label: isDark ? "☀️ Light mode" : "🌙 Dark mode", onPress: () => setIsDark(!isDark) },
           ]}
         />
       </View>
@@ -140,7 +141,8 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
         <View style={styles.barRow}>
           <TouchableOpacity style={styles.barBtn} onPress={handleImport} disabled={isImporting}>
-            <Text style={[styles.barBtnText, { color: colors.text }]}>{isImporting ? "Importing..." : "📄 Import"}</Text>
+            <FileText size={16} color={colors.muted} />
+            <Text style={[styles.barBtnText, { color: colors.muted }]}>{isImporting ? "Importing..." : "Import"}</Text>
           </TouchableOpacity>
 
           <View style={styles.barRight}>
@@ -148,9 +150,9 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
               <Text style={[styles.estimate, { color: colors.muted }]}>{timeEstimate}</Text>
             ) : null}
 
-            <TouchableOpacity style={[styles.playBtn, (isPlaying || isGenerating) && styles.playBtnActive]}
+            <TouchableOpacity style={[styles.playBtn, { backgroundColor: isDark ? "#e8ecff15" : "#1a1a2e10" }, (isPlaying || isGenerating) && styles.playBtnActive]}
               onPress={handleRead}>
-              <Text style={[styles.playBtnText, (isPlaying || isGenerating) && styles.playBtnTextActive]}>
+              <Text style={[styles.playBtnText, { color: colors.text }, (isPlaying || isGenerating) && styles.playBtnTextActive]}>
                 {isGenerating ? `Preparing${timeEstimate ? ` ${timeEstimate}` : ""}` : isPlaying ? "Stop" : "Read Aloud"}
               </Text>
             </TouchableOpacity>
@@ -158,9 +160,10 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
             <TouchableOpacity style={[styles.voiceChip, { borderColor: colors.border }]} onPress={() => setShowVoicePicker(true)}>
               <Text style={[styles.voiceChipText, { color: colors.text }]}>{selectedVoice.label}</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+
+            <TouchableOpacity onPress={() => setIsDark(!isDark)} style={styles.themeBtn}>
+              {isDark ? <Sun size={18} color={colors.muted} /> : <Moon size={18} color={colors.muted} />}
+            </TouchableOpacity>
 
       <Modal visible={showVoicePicker} transparent animationType="slide" onRequestClose={() => setShowVoicePicker(false)}>
         <TouchableOpacity style={styles.backdrop} onPress={() => setShowVoicePicker(false)} activeOpacity={1}>
@@ -184,7 +187,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingTop: 56, paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1 },
+  header: { paddingTop: 52, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1 },
 
   body: { flex: 1 },
   bodyContent: { padding: 24, paddingBottom: 24 },
@@ -196,16 +199,17 @@ const styles = StyleSheet.create({
   toast: { backgroundColor: "#0d6b61", paddingVertical: 8, paddingHorizontal: 16, alignItems: "center" },
   toastText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   barRow: { minHeight: 56, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 4 },
-  barBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
+  barBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
   barBtnText: { fontSize: 14, fontWeight: "600" },
   barRight: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 8 },
   estimate: { fontSize: 12, fontWeight: "600" },
-  playBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 9, borderRadius: 22, backgroundColor: "#e8ecff15" },
+  playBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 9, borderRadius: 22 },
   playBtnActive: { backgroundColor: "#5b8cff" },
   playBtnText: { color: "#e8ecff", fontSize: 14, fontWeight: "700" },
   playBtnTextActive: { color: "#fff", fontSize: 14, fontWeight: "700" },
   voiceChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1 },
   voiceChipText: { fontSize: 12, fontWeight: "600" },
+  themeBtn: { padding: 4, marginLeft: 4 },
 
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   sheet: { borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 56 },
