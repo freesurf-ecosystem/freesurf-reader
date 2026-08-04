@@ -17,6 +17,26 @@ type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader
 
 const MIN_INPUT_HEIGHT = 280;
 const MAX_CHUNK = 4000;
+
+function chunkText(t: string): string[] {
+  const text = t.trim();
+  if (!text) return [];
+  if (text.length <= MAX_CHUNK) return [text];
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= MAX_CHUNK) { chunks.push(remaining.trim()); break; }
+    let brk = remaining.lastIndexOf(". ", MAX_CHUNK);
+    if (brk < 300) brk = remaining.lastIndexOf("? ", MAX_CHUNK);
+    if (brk < 300) brk = remaining.lastIndexOf("! ", MAX_CHUNK);
+    if (brk < 300) brk = remaining.lastIndexOf("\n", MAX_CHUNK);
+    if (brk < 300) brk = remaining.lastIndexOf(" ", MAX_CHUNK);
+    if (brk < 300) brk = MAX_CHUNK;
+    chunks.push(remaining.slice(0, brk + 1).trim());
+    remaining = remaining.slice(brk + 1).trim();
+  }
+  return chunks.filter(s => s.length > 10);
+}
 const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 
 async function ensureDir() {
