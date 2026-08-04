@@ -144,7 +144,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingTop: 52, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1 },
+  header: { paddingTop: 40, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1 },
   list: { padding: 16, paddingBottom: 48 },
   empty: { alignItems: "center", paddingTop: 80 },
   emptyT: { fontSize: 18, fontWeight: "600", marginBottom: 8 },

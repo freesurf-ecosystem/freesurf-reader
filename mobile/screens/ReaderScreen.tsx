@@ -107,9 +107,8 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
   const timeEstimate = useMemo(() => {
     const len = (text || "").trim().length;
     if (!len) return null;
-    const chunks = Math.ceil(len / MAX_CHUNK);
-    const totalSec = Math.ceil(len * 3 / 1000) + (chunks * 15);
-    const m = Math.floor(totalSec / 60), s = totalSec % 60;
+    const sec = Math.ceil(len * 3 / 1000) + 15;
+    const m = Math.floor(sec / 60), s = sec % 60;
     return m > 0 ? `~${m}m ${s}s` : `~${s}s`;
   }, [text]);
 
@@ -120,12 +119,8 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
     setIsGenerating(true);
     try {
-      const chunks = chunkText(content);
-      const b64Chunks: string[] = [];
-      for (const chunk of chunks) {
-        b64Chunks.push(await textToSpeech(chunk, selectedVoice.voice));
-      }
-      const b64 = concatWavChunks(b64Chunks);
+      const ttsText = content.length > MAX_CHUNK ? content.slice(0, MAX_CHUNK) : content;
+      const b64 = await textToSpeech(ttsText, selectedVoice.voice);
       await ensureDir();
       const fname = `reader-${Date.now()}.wav`;
       const uri = AUDIO_DIR + fname;
@@ -208,7 +203,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
               <Text style={[styles.estimate, { color: colors.dim }]}>{timeEstimate}</Text>
             ) : null}
 
-            <TouchableOpacity style={[styles.playBtn, { backgroundColor: isDark ? "#e8ecff15" : "#1a1a2e10" }, (isPlaying || isGenerating) && styles.playBtnActive]}
+            <TouchableOpacity style={[styles.playBtn, { backgroundColor: isDark ? "#e8ecff15" : "#1a1a2e10" }]}
               onPress={handleRead}>
               <Text style={[styles.playBtnText, { color: colors.text }, (isPlaying || isGenerating) && styles.playBtnTextActive]}>
                 {isGenerating ? `Preparing${timeEstimate ? ` ${timeEstimate}` : ""}` : isPlaying ? "Stop" : "Read Aloud"}
@@ -248,7 +243,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingTop: 56, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1 },
+  header: { paddingTop: 42, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1 },
 
   body: { flex: 1 },
   bodyContent: { padding: 24, paddingBottom: 24 },
