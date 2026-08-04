@@ -57,7 +57,12 @@ export async function textToSpeech(
     body: JSON.stringify({ text, voice, speed }),
   });
 
-  const data = await res.json();
+  const raw = await res.text();
+  let data: any;
+  try { data = JSON.parse(raw); } catch {
+    throw new Error(`TTS returned non-JSON (${res.status}): ${raw.slice(0, 200)}`);
+  }
+
   if (!res.ok || data.error) {
     throw new Error(data.error || `TTS request failed (${res.status})`);
   }
