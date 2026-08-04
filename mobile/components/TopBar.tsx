@@ -18,7 +18,7 @@ export default function TopBar({ appName, onSignIn, onSignOut, isLoggedIn, menuI
 
   return (
     <View style={styles.bar}>
-      <Text style={[styles.brand, { color: "#5b8cff" }]}>{appName}</Text>
+      <Text style={[styles.brand, { color: c.text }]}>{appName}</Text>
       <Pressable style={styles.hamburger} onPress={() => setOpen(true)} accessibilityLabel="Open menu">
         <View style={[styles.line, { backgroundColor: c.text }]} />
         <View style={[styles.line, { backgroundColor: c.text }]} />
