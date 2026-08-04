@@ -120,7 +120,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
           onSignOut={handleSignOut}
           colors={{ text: colors.text, muted: colors.muted, card: colors.card, border: colors.border }}
           menuItems={[
-            { label: `Saved (${historyCount})`, onPress: () => navigation.navigate("History") },
+            { label: "Recordings", onPress: () => navigation.navigate("History", { isDark }) },
           ]}
         />
       </View>

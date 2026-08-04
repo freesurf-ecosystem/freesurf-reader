@@ -11,7 +11,7 @@ import AuthScreen from "./screens/AuthScreen";
 
 export type RootStackParamList = {
   Reader: undefined;
-  History: undefined;
+  History: { isDark?: boolean } | undefined;
   Auth: undefined;
 };
 

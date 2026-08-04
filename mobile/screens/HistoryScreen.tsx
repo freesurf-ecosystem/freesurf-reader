@@ -35,12 +35,17 @@ const sanitizeFileName = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "recording";
 
-export default function HistoryScreen({ navigation }: Props) {
+export default function HistoryScreen({ navigation, route }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const soundRef = useRef<Audio.Sound | null>(null);
+  const isDark = route.params?.isDark ?? true;
+
+  const colors = isDark
+    ? { bg: "#0b1020", card: "#111937", text: "#e8ecff", muted: "#5f6b7a", border: "#2a3568", accent: "#5b8cff" }
+    : { bg: "#f8f9fa", card: "#ffffff", text: "#1a1a2e", muted: "#6b7280", border: "#e5e7eb", accent: "#2563eb" };
 
   useFocusEffect(
     useCallback(() => {
@@ -189,12 +194,12 @@ export default function HistoryScreen({ navigation }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>← Back</Text>
+          <Text style={[styles.back, { color: colors.accent }]}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Saved Recordings</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Recordings</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -205,14 +210,14 @@ export default function HistoryScreen({ navigation }: Props) {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>🎧</Text>
-            <Text style={styles.emptyTitle}>No recordings yet</Text>
-            <Text style={styles.emptySub}>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>No recordings yet</Text>
+            <Text style={[styles.emptySub, { color: colors.muted }]}>
               Generated audio will appear here automatically
             </Text>
           </View>
         }
         renderItem={({ item }) => (
-          <View style={styles.item}>
+          <View style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <TouchableOpacity
               style={styles.itemMain}
               onPress={() => togglePlayback(item)}
@@ -223,7 +228,7 @@ export default function HistoryScreen({ navigation }: Props) {
               <View style={styles.itemInfo}>
                 {editingId === item.id ? (
                   <TextInput
-                    style={styles.renameInput}
+                    style={[styles.renameInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
                     value={editingTitle}
                     onChangeText={setEditingTitle}
                     onSubmitEditing={saveRename}
@@ -231,14 +236,14 @@ export default function HistoryScreen({ navigation }: Props) {
                     autoFocus
                     selectTextOnFocus
                     placeholder="Recording name"
-                    placeholderTextColor="#5f6b7a"
+                    placeholderTextColor={colors.muted}
                   />
                 ) : (
-                  <Text style={styles.itemTitle} numberOfLines={1}>
+                  <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
                     {item.title}
                   </Text>
                 )}
-                <Text style={styles.itemMeta}>
+                <Text style={[styles.itemMeta, { color: colors.muted }]}>
                   {item.voice} · {formatDate(item.createdAt)}
                 </Text>
               </View>
@@ -246,22 +251,22 @@ export default function HistoryScreen({ navigation }: Props) {
 
             <View style={styles.itemActions}>
               {editingId === item.id ? (
-                <TouchableOpacity style={styles.actionBtn} onPress={saveRename}>
-                  <Text style={[styles.actionBtnText, { color: "#5b8cff" }]}>Save</Text>
+                <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border }]} onPress={saveRename}>
+                  <Text style={[styles.actionBtnText, { color: colors.accent }]}>Save</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={styles.actionBtn} onPress={() => startRename(item)}>
-                  <Text style={styles.actionBtnText}>Rename</Text>
+                <TouchableOpacity style={[styles.actionBtn, { borderColor: colors.border }]} onPress={() => startRename(item)}>
+                  <Text style={[styles.actionBtnText, { color: colors.text }]}>Rename</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={styles.actionBtn}
+                style={[styles.actionBtn, { borderColor: colors.border }]}
                 onPress={() => shareRecording(item)}
               >
-                <Text style={styles.actionBtnText}>Share</Text>
+                <Text style={[styles.actionBtnText, { color: colors.text }]}>Share</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.actionBtn}
+                style={[styles.actionBtn, { borderColor: colors.border }]}
                 onPress={() => {
                   Alert.alert(
                     "Delete recording",
@@ -288,57 +293,32 @@ export default function HistoryScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0b1020" },
+  container: { flex: 1 },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    paddingTop: 56,
-    backgroundColor: "#111937",
-    borderBottomWidth: 1,
-    borderBottomColor: "#2a3568",
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    padding: 16, paddingTop: 56, borderBottomWidth: 1,
   },
-  back: { color: "#5b8cff", fontSize: 15, fontWeight: "500" },
-  headerTitle: { fontSize: 16, fontWeight: "700", color: "#e8ecff" },
+  back: { fontSize: 15, fontWeight: "500" },
+  headerTitle: { fontSize: 16, fontWeight: "700" },
 
   list: { padding: 16, paddingBottom: 48 },
   empty: { alignItems: "center", paddingTop: 80 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: "600", color: "#e8ecff", marginBottom: 8 },
-  emptySub: { fontSize: 14, color: "#5f6b7a", textAlign: "center" },
+  emptyTitle: { fontSize: 18, fontWeight: "600", marginBottom: 8 },
+  emptySub: { fontSize: 14, textAlign: "center" },
 
-  item: {
-    backgroundColor: "#111937",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#2a3568",
-  },
+  item: { borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1 },
   itemMain: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
   playIcon: { fontSize: 20, marginRight: 12 },
   itemInfo: { flex: 1 },
-  itemTitle: { fontSize: 15, fontWeight: "600", color: "#e8ecff" },
-  itemMeta: { fontSize: 12, color: "#5f6b7a", marginTop: 2 },
+  itemTitle: { fontSize: 15, fontWeight: "600" },
+  itemMeta: { fontSize: 12, marginTop: 2 },
   renameInput: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#e8ecff",
-    backgroundColor: "#1e2a4a",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#5b8cff",
+    fontSize: 15, fontWeight: "600", borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1,
   },
 
   itemActions: { flexDirection: "row", justifyContent: "flex-end", gap: 4 },
-  actionBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#1e2a4a",
-  },
-  actionBtnText: { color: "#b3bddf", fontSize: 13, fontWeight: "500" },
+  actionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  actionBtnText: { fontSize: 13, fontWeight: "500" },
 });
