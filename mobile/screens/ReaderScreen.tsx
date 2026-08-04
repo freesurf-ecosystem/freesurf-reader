@@ -79,8 +79,7 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
     const chunks = Math.max(1, Math.ceil(len / MAX_CHUNK));
     const totalSec = Math.ceil(len * 3 / 1000) + (chunks * 15);
     const m = Math.floor(totalSec / 60), s = totalSec % 60;
-    const chunkInfo = chunks > 1 ? ` (${chunks} parts)` : "";
-    return m > 0 ? `~${m}m ${s}s${chunkInfo}` : `~${s}s${chunkInfo}`;
+    return m > 0 ? `~${m}m ${s}s` : `~${s}s`;
   }, [text]);
 
   async function handleRead() {
@@ -108,7 +107,6 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
           console.log(`[Reader] Chunk ${i + 1}/${chunks.length} FAILED: ${e.message}`);
         }
       }
-      setGenProgress("");
       console.log(`[Reader] Generated ${uris.length} chunks — first ${uris[0].substring(0, 50)} chars`);
 
       const firstUri = uris[0];
