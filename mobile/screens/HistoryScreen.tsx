@@ -32,6 +32,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
     : { bg: "#f8f9fa", card: "#ffffff", text: "#111827", dim: "#6b7280", border: "#e5e7eb", accent: "#2563eb" };
 
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -48,16 +49,23 @@ export default function HistoryScreen({ navigation, route }: Props) {
   async function persist(u: Recording[]) { await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(u)); setRecordings(u); }
 
   async function togglePlay(item: Recording) {
-    if (playingId === item.id) { await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync(); soundRef.current = null; setPlayingId(null); setPos(0); return; }
-    await soundRef.current?.stopAsync().catch(() => {});
-    await soundRef.current?.unloadAsync().catch(() => {});
+    if (playingId === item.id && isPlaying) { await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync(); soundRef.current = null; setPlayingId(null); setPos(0); setIsPlaying(false); return; }
+    if (playingId !== item.id) {
+      await soundRef.current?.stopAsync().catch(() => {});
+      await soundRef.current?.unloadAsync().catch(() => {});
+    }
     const { sound } = await Audio.Sound.createAsync({ uri: item.uri }, { shouldPlay: true }, (s) => {
-      if (s.isLoaded) { setPos(s.positionMillis); setDur(s.durationMillis); if (s.didJustFinish) { setPlayingId(null); setPos(0); } }
+      if (s.isLoaded) { setPos(s.positionMillis); setDur(s.durationMillis); if (s.didJustFinish) { setPlayingId(null); setPos(0); setIsPlaying(false); } }
     });
-    soundRef.current = sound; setPlayingId(item.id);
+    soundRef.current = sound; setPlayingId(item.id); setIsPlaying(true);
     const st = await sound.getStatusAsync(); if (st.isLoaded) setDur(st.durationMillis);
   }
-  async function seek(locX: number) { if (!dur) return; const ratio = Math.max(0, Math.min(1, locX / progW.current)); await soundRef.current?.setPositionAsync(ratio * dur); setPos(ratio * dur); }
+  async function seekAndPlay(item: Recording, locX: number) {
+    if (!dur || playingId !== item.id) { await togglePlay(item); return; }
+    const ratio = Math.max(0, Math.min(1, locX / progW.current));
+    const ms = ratio * dur;
+    await soundRef.current?.setPositionAsync(ms); setPos(ms);
+  }
   async function jump(ms: number) { const np = Math.max(0, Math.min(dur, pos + ms)); await soundRef.current?.setPositionAsync(np); setPos(np); }
   function startRename(item: Recording) { setEditingId(item.id); setEditingTitle(item.title); }
   function cancelRename() { setEditingId(null); setEditingTitle(""); }
@@ -88,29 +96,39 @@ export default function HistoryScreen({ navigation, route }: Props) {
               </>
             )}
           </View>
-          <TouchableOpacity style={[s.menuBtn, { borderColor: c.border }]} onPress={() => setOpenMenuId(isMenuOpen ? null : item.id)}>
+          <TouchableOpacity style={[s.menuBtn, { borderColor: c.border }]} onPress={async () => {
+            const nextOpen = isMenuOpen ? null : item.id;
+            setOpenMenuId(nextOpen);
+            if (nextOpen && playingId !== item.id) {
+              soundRef.current?.stopAsync().catch(() => {});
+              soundRef.current?.unloadAsync().catch(() => {});
+              const { sound } = await Audio.Sound.createAsync({ uri: item.uri }, { shouldPlay: false }, (s) => {
+                if (s.isLoaded) setDur(s.durationMillis || 0);
+              });
+              const st = await sound.getStatusAsync();
+              if (st.isLoaded) { setDur(st.durationMillis || 0); setPos(0); }
+              sound.unloadAsync().catch(() => {});
+              setPlayingId(null); setIsPlaying(false);
+            }
+          }}>
             <EllipsisVertical size={18} color={c.text} />
           </TouchableOpacity>
         </View>
 
         {isMenuOpen && (
           <View>
-            {isActive && (
-              <View>
-                <View style={s.progRow}>
-                  <Text style={[s.time, { color: c.dim }]}>{formatTime(pos)}</Text>
-                  <TouchableOpacity style={[s.track, { backgroundColor: c.bg }]} onPress={(e) => seek(e.nativeEvent.locationX)} onLayout={(e) => { progW.current = e.nativeEvent.layout.width; }} activeOpacity={1}>
-                    <View style={[s.fill, { width: `${dur > 0 ? Math.min(1, pos / dur) * 100 : 0}%`, backgroundColor: c.accent }]} />
-                  </TouchableOpacity>
-                  <Text style={[s.time, { color: c.dim }]}>{formatTime(dur)}</Text>
-                </View>
-                <View style={s.ctrls}>
-                  <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => jump(-15000)}><Text style={[s.ctrlT, { color: c.text }]}>-15s</Text></TouchableOpacity>
-                  <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => { setPos(0); soundRef.current?.setPositionAsync(0); }}><Text style={[s.ctrlT, { color: c.text }]}>Restart</Text></TouchableOpacity>
-                  <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => jump(15000)}><Text style={[s.ctrlT, { color: c.text }]}>+15s</Text></TouchableOpacity>
-                </View>
-              </View>
-            )}
+            <View style={s.progRow}>
+              <Text style={[s.time, { color: c.dim }]}>{formatTime(pos)}</Text>
+              <TouchableOpacity style={[s.track, { backgroundColor: c.bg }]} onPress={(e) => seekAndPlay(item, e.nativeEvent.locationX)} onLayout={(e) => { progW.current = e.nativeEvent.layout.width; }} activeOpacity={1}>
+                <View style={[s.fill, { width: `${dur > 0 ? Math.min(1, pos / dur) * 100 : 0}%`, backgroundColor: c.accent }]} />
+              </TouchableOpacity>
+              <Text style={[s.time, { color: c.dim }]}>{formatTime(dur)}</Text>
+            </View>
+            <View style={s.ctrls}>
+              <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => jump(-15000)}><Text style={[s.ctrlT, { color: c.text }]}>-15s</Text></TouchableOpacity>
+              <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => { setPos(0); soundRef.current?.setPositionAsync(0); }}><Text style={[s.ctrlT, { color: c.text }]}>Restart</Text></TouchableOpacity>
+              <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => jump(15000)}><Text style={[s.ctrlT, { color: c.text }]}>+15s</Text></TouchableOpacity>
+            </View>
 
             <View style={[s.actions, { borderTopColor: c.border }]}>
               {isEditing ? (
