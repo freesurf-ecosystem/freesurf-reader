@@ -189,7 +189,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
                   togglePlayAt(item, ci, targetMs - offset);
                 }}>
                 <View style={[s.fill, { width: `${totalDur > 0 ? Math.min(1, (pos + (cumulative[chunkIndex - 1] || 0)) / totalDur) * 100 : 0}%`, backgroundColor: c.accent }]} />
-              </TouchableOpacity>
+              </View>
               <Text style={[s.time, { color: c.dim }]}>{formatTime(totalDur)}</Text>
             </View>
             <View style={s.ctrls}>
