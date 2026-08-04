@@ -93,19 +93,26 @@ export default function ReaderScreen({ navigation, isLoggedIn }: Props) {
     setGenProgress("");
     try {
       const chunks = chunkText(content);
+      console.log(`[Reader] Text ${content.length} chars → ${chunks.length} chunks`);
 
       await ensureDir();
       const batchId = Date.now();
       const uris: string[] = [];
       for (let i = 0; i < chunks.length; i++) {
         setGenProgress(`Chunk ${i + 1}/${chunks.length}`);
-        const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
-        const fname = `reader-${batchId}-${i}.wav`;
-        const uri = AUDIO_DIR + fname;
-        await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
-        uris.push(uri);
+        try {
+          const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
+          const fname = `reader-${batchId}-${i}.wav`;
+          const uri = AUDIO_DIR + fname;
+          await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
+          uris.push(uri);
+          console.log(`[Reader] Chunk ${i + 1}/${chunks.length} OK — ${chunks[i].length} chars → ${(b64.length / 1024).toFixed(0)}KB`);
+        } catch (e: any) {
+          console.log(`[Reader] Chunk ${i + 1}/${chunks.length} FAILED: ${e.message}`);
+        }
       }
       setGenProgress("");
+      console.log(`[Reader] Generated ${uris.length} chunks — first ${uris[0].substring(0, 50)} chars`);
 
       const firstUri = uris[0];
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
