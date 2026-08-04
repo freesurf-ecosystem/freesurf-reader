@@ -34,6 +34,9 @@ export default function HistoryScreen({ navigation, route }: Props) {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [chunkIndex, setChunkIndex] = useState(0);
+  const [chunkDurs, setChunkDurs] = useState<number[]>([]);
+  const totalDur = chunkDurs.reduce((s, d) => s + d, 0);
+  const cumulative = chunkDurs.reduce<number[]>((a, d, i) => { a.push((a[i - 1] || 0) + d); return a; }, []);
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -54,54 +57,32 @@ export default function HistoryScreen({ navigation, route }: Props) {
 
   const nextSoundRef = useRef<Audio.Sound | null>(null);
 
-  async function togglePlay(item: Recording) {
+  async function togglePlay(item: Recording) { await togglePlayAt(item, 0, 0); }
+  async function togglePlayAt(item: Recording, ci: number, posMs: number) {
     const uris = item.uris && item.uris.length > 0 ? item.uris : [item.uri];
-    if (playingId === item.id && isPlaying) {
-      await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync();
-      await nextSoundRef.current?.unloadAsync().catch(() => {});
-      soundRef.current = null; nextSoundRef.current = null;
-      setPlayingId(null); setPos(0); setIsPlaying(false); setChunkIndex(0); return;
-    }
     await soundRef.current?.stopAsync().catch(() => {});
     await soundRef.current?.unloadAsync().catch(() => {});
     await nextSoundRef.current?.unloadAsync().catch(() => {});
 
-    const playChunk = async (idx: number) => {
+    const playChunk = async (idx: number, startAt: number) => {
       if (idx >= uris.length) { setPlayingId(null); setIsPlaying(false); setChunkIndex(0); return; }
       setChunkIndex(idx);
-      // Preload next chunk for gapless transition
       if (idx + 1 < uris.length) {
         nextSoundRef.current?.unloadAsync().catch(() => {});
         const { sound: next } = await Audio.Sound.createAsync({ uri: uris[idx + 1] }, { shouldPlay: false });
         nextSoundRef.current = next;
       }
-      const { sound } = await Audio.Sound.createAsync({ uri: uris[idx] }, { shouldPlay: true }, (s) => {
-        if (s.isLoaded) { setPos(s.positionMillis); setDur(s.durationMillis);
-          if (s.didJustFinish) {
-            sound.unloadAsync().catch(() => {});
-            if (nextSoundRef.current) {
-              soundRef.current = nextSoundRef.current;
-              nextSoundRef.current = null;
-              soundRef.current!.playAsync();
-              playChunk(idx + 1);
-            } else {
-              playChunk(idx + 1);
-            }
-          }
-        }
+      const { sound } = await Audio.Sound.createAsync({ uri: uris[idx] }, { shouldPlay: true, positionMillis: startAt }, (s) => {
+        if (s.isLoaded) { setPos(s.positionMillis); if (s.didJustFinish) {
+          sound.unloadAsync().catch(() => {});
+          if (nextSoundRef.current) { soundRef.current = nextSoundRef.current; nextSoundRef.current = null; soundRef.current!.playAsync(); playChunk(idx + 1, 0); }
+          else { playChunk(idx + 1, 0); }
+        }}
       });
       soundRef.current = sound;
-      const st = await sound.getStatusAsync(); if (st.isLoaded) setDur(st.durationMillis);
     };
-    setPlayingId(item.id); setIsPlaying(true); setPos(0);
-    await playChunk(0);
-  }
-  async function seekAndPlay(item: Recording, locX: number) {
-    if (playingId !== item.id) { await togglePlay(item); return; }
-    if (!dur) return;
-    const ratio = Math.max(0, Math.min(1, locX / progW.current));
-    const ms = ratio * dur;
-    await soundRef.current?.setPositionAsync(ms); setPos(ms);
+    setPlayingId(item.id); setIsPlaying(true); setPos(posMs);
+    await playChunk(ci, posMs);
   }
   async function jump(ms: number) { const np = Math.max(0, Math.min(dur, pos + ms)); await soundRef.current?.setPositionAsync(np); setPos(np); }
   function startRename(item: Recording) { setEditingId(item.id); setEditingTitle(item.title); }
@@ -148,14 +129,18 @@ export default function HistoryScreen({ navigation, route }: Props) {
               soundRef.current?.stopAsync().catch(() => {});
               soundRef.current?.unloadAsync().catch(() => {});
               nextSoundRef.current?.unloadAsync().catch(() => {});
-              const firstUri = item.uris?.[0] || item.uri;
-              const { sound } = await Audio.Sound.createAsync({ uri: firstUri }, { shouldPlay: false }, (s) => {
-                if (s.isLoaded) setDur(s.durationMillis || 0);
-              });
-              const st = await sound.getStatusAsync();
-              if (st.isLoaded) { setDur(st.durationMillis || 0); setPos(0); }
-              sound.unloadAsync().catch(() => {});
+              const uris = item.uris || [item.uri];
+              const durs: number[] = [];
+              for (const u of uris) {
+                const { sound } = await Audio.Sound.createAsync({ uri: u }, { shouldPlay: false });
+                const st = await sound.getStatusAsync();
+                durs.push(st.isLoaded ? (st.durationMillis || 0) : 0);
+                sound.unloadAsync().catch(() => {});
+              }
+              setChunkDurs(durs);
               setPlayingId(null); setIsPlaying(false); setChunkIndex(0);
+            } else if (!nextOpen) {
+              setChunkDurs([]);
             }
           }}>
             <EllipsisVertical size={18} color={c.text} />
@@ -165,11 +150,22 @@ export default function HistoryScreen({ navigation, route }: Props) {
         {isMenuOpen && (
           <View>
             <View style={s.progRow}>
-              <Text style={[s.time, { color: c.dim }]}>{formatTime(pos)}</Text>
-              <TouchableOpacity style={[s.track, { backgroundColor: c.bg }]} onPress={(e) => seekAndPlay(item, e.nativeEvent.locationX)} onLayout={(e) => { progW.current = e.nativeEvent.layout.width; }} activeOpacity={1}>
-                <View style={[s.fill, { width: `${dur > 0 ? Math.min(1, pos / dur) * 100 : 0}%`, backgroundColor: c.accent }]} />
+              <Text style={[s.time, { color: c.dim }]}>{formatTime(pos + (cumulative[chunkIndex - 1] || 0))}</Text>
+              <TouchableOpacity style={[s.track, { backgroundColor: c.bg }]} onPress={(e) => {
+                if (!totalDur) return;
+                const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / progW.current));
+                const targetMs = ratio * totalDur;
+                // Find which chunk
+                let ci = 0, offset = 0;
+                for (let j = 0; j < cumulative.length; j++) {
+                  if (targetMs < cumulative[j]) { ci = j; offset = j > 0 ? cumulative[j - 1] : 0; break; }
+                }
+                const chunkPos = targetMs - offset;
+                togglePlayAt(item, ci, chunkPos);
+              }} onLayout={(e) => { progW.current = e.nativeEvent.layout.width; }} activeOpacity={1}>
+                <View style={[s.fill, { width: `${totalDur > 0 ? Math.min(1, (pos + (cumulative[chunkIndex - 1] || 0)) / totalDur) * 100 : 0}%`, backgroundColor: c.accent }]} />
               </TouchableOpacity>
-              <Text style={[s.time, { color: c.dim }]}>{formatTime(dur)}</Text>
+              <Text style={[s.time, { color: c.dim }]}>{formatTime(totalDur)}</Text>
             </View>
             <View style={s.ctrls}>
               <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => jump(-15000)}><Text style={[s.ctrlT, { color: c.text }]}>-15s</Text></TouchableOpacity>
