@@ -46,7 +46,6 @@ function chunkText(t: string): string[] {
   }
   return chunks.filter(s => s.length > 10);
 }
-const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 
 async function ensureDir() {
   const info = await FileSystem.getInfoAsync(AUDIO_DIR);
