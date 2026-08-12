@@ -1,12 +1,13 @@
 import React, { useCallback, useRef, useState } from "react";
-import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
-import TopBar from "../components/TopBar";
+import FloatingHamburger from "../components/FloatingHamburger";
 import { Play, Pause, Share2, X, EllipsisVertical } from "lucide-react-native";
 
 const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
@@ -26,9 +27,11 @@ function formatTime(ms: number) {
 
 export default function HistoryScreen({ navigation, route }: Props) {
   const [recordings, setRecordings] = useState<Recording[]>([]);
+  const insets = useSafeAreaInsets();
+  const topPad = insets.top + 12;
   const isDark = route.params?.isDark ?? true;
   const c = isDark
-    ? { bg: "#0b1020", card: "#111937", text: "#e8ecff", dim: "#8899bb", border: "#2a3568", accent: "#5b8cff" }
+    ? { bg: "#000000", card: "#0d0d0d", text: "#e8ecff", dim: "#8899bb", border: "#1a1a1a", accent: "#5b8cff" }
     : { bg: "#f8f9fa", card: "#ffffff", text: "#111827", dim: "#6b7280", border: "#e5e7eb", accent: "#2563eb" };
 
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -93,6 +96,26 @@ export default function HistoryScreen({ navigation, route }: Props) {
     await playChunk(ci, posMs);
   }
   async function jump(ms: number) { const np = Math.max(0, Math.min(dur, pos + ms)); await soundRef.current?.setPositionAsync(np); setPos(np); }
+  async function openCardPanel(item: Recording) {
+    setOpenMenuId(item.id);
+    if (playingId !== item.id) {
+      soundRef.current?.stopAsync().catch(() => {});
+      soundRef.current?.unloadAsync().catch(() => {});
+      nextSoundRef.current?.unloadAsync().catch(() => {});
+      const uris = item.uris || [item.uri];
+      const durs: number[] = [];
+      for (const u of uris) {
+        const { sound } = await Audio.Sound.createAsync({ uri: u }, { shouldPlay: false });
+        const st = await sound.getStatusAsync();
+        durs.push(st.isLoaded ? (st.durationMillis || 0) : 0);
+        sound.unloadAsync().catch(() => {});
+      }
+      setChunkDurs(durs);
+      setPlayingId(null); setIsPlaying(false); setChunkIndex(0);
+    }
+  }
+
+  function closeCardPanel() { setOpenMenuId(null); setChunkDurs([]); }
   function startRename(item: Recording) { setEditingId(item.id); setEditingTitle(item.title); }
   function cancelRename() { setEditingId(null); setEditingTitle(""); }
   async function saveRename() { const id = editingId; if (!id || !editingTitle.trim()) { cancelRename(); return; } await persist(recordings.map(r => r.id === id ? { ...r, title: editingTitle.trim() } : r)); cancelRename(); }
@@ -114,7 +137,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
     return (
       <View style={[s.card, { backgroundColor: c.card, borderColor: c.border }]}>
         <View style={s.row}>
-          <TouchableOpacity style={[s.play, { borderColor: c.border, backgroundColor: isActive ? c.text : c.bg }]} onPress={() => { setOpenMenuId(null); togglePlay(item); }}>
+          <TouchableOpacity style={[s.play, { borderColor: c.border, backgroundColor: isActive ? c.text : c.bg }]} onPress={async () => { if (!isMenuOpen) await openCardPanel(item); togglePlay(item); }}>
             {isActive ? <Pause size={18} color={c.bg} /> : <Play size={18} color={c.text} />}
           </TouchableOpacity>
           <View style={s.info}>
@@ -131,25 +154,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
             )}
           </View>
           <TouchableOpacity style={[s.menuBtn, { borderColor: c.border }]} onPress={async () => {
-            const nextOpen = isMenuOpen ? null : item.id;
-            setOpenMenuId(nextOpen);
-            if (nextOpen && playingId !== item.id) {
-              soundRef.current?.stopAsync().catch(() => {});
-              soundRef.current?.unloadAsync().catch(() => {});
-              nextSoundRef.current?.unloadAsync().catch(() => {});
-              const uris = item.uris || [item.uri];
-              const durs: number[] = [];
-              for (const u of uris) {
-                const { sound } = await Audio.Sound.createAsync({ uri: u }, { shouldPlay: false });
-                const st = await sound.getStatusAsync();
-                durs.push(st.isLoaded ? (st.durationMillis || 0) : 0);
-                sound.unloadAsync().catch(() => {});
-              }
-              setChunkDurs(durs);
-              setPlayingId(null); setIsPlaying(false); setChunkIndex(0);
-            } else if (!nextOpen) {
-              setChunkDurs([]);
-            }
+            if (isMenuOpen) { closeCardPanel(); } else { await openCardPanel(item); }
           }}>
             <EllipsisVertical size={18} color={c.text} />
           </TouchableOpacity>
@@ -200,10 +205,8 @@ export default function HistoryScreen({ navigation, route }: Props) {
 
   return (
     <View style={[s.root, { backgroundColor: c.bg }]}>
-      <View style={[s.header, { backgroundColor: c.card, borderBottomColor: c.border }]}>
-        <TopBar appName="Recordings" colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }} menuItems={[{ label: "Dashboard", onPress: () => navigation.goBack() }]} />
-      </View>
-      <FlatList data={recordings} keyExtractor={(r) => r.id} contentContainerStyle={s.list} removeClippedSubviews={false}
+      <FloatingHamburger topOffset={topPad} colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }} menuItems={[{ label: "Dashboard", onPress: () => navigation.goBack() }]} />
+      <FlatList data={recordings} keyExtractor={(r) => r.id} contentContainerStyle={[s.list, { paddingTop: topPad + 48 }]} removeClippedSubviews={false}
         ListEmptyComponent={<View style={s.empty}><Text style={[s.emptyT, { color: c.text }]}>No recordings yet</Text><Text style={[s.emptyS, { color: c.dim }]}>Generated audio will appear here</Text></View>}
         renderItem={({ item }) => renderCard(item)} />
     </View>
@@ -212,7 +215,6 @@ export default function HistoryScreen({ navigation, route }: Props) {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingTop: 40, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1 },
   list: { padding: 16, paddingBottom: 48 },
   empty: { alignItems: "center", paddingTop: 80 },
   emptyT: { fontSize: 18, fontWeight: "600", marginBottom: 8 },

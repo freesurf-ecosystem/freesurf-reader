@@ -9,9 +9,12 @@ print("BOOT: handler.py starting", flush=True)
 
 import base64
 import io
+import os
 import runpod
 import traceback
 import sys
+
+os.environ["HF_TOKEN"] = os.environ.get("HF_TOKEN", "")
 
 try:
     import torch

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "FreeSurf Natural Reader",
+    "name": "Reader",
     "slug": "freesurf-natural-reader",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -20,7 +20,8 @@
     "ios": {
       "bundleIdentifier": "tools.freesurf.reader",
       "infoPlist": {
-        "NSUserTrackingUsageDescription": "Your device identifier is used to serve personalized ads and keep FreeSurf free."
+        "NSUserTrackingUsageDescription": "Your device identifier is used to serve personalized ads and keep FreeSurf free.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -43,6 +44,19 @@
       "eas": {
         "projectId": "728b0762-2d4f-4708-bd41-72cbe28e7f17"
       }
-    }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "useLegacyPackaging": false
+          }
+        }
+      ]
+    ]
   }
 }

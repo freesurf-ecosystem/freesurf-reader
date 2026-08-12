@@ -1,18 +1,22 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Linking,
-  ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform,
+  View, ScrollView, ActivityIndicator, Alert, Modal,
+  KeyboardAvoidingView, Platform, Linking, Switch, TouchableOpacity,
 } from "react-native";
+import {
+  Text, Button, Surface,
+  TextInput as PaperInput, useTheme,
+} from "react-native-paper";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import * as DocumentPicker from "expo-document-picker";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import { textToSpeech, VOICES, type Voice } from "../lib/tts";
-import TopBar from "../components/TopBar";
-import { Sun, Moon, FileText } from "lucide-react-native";
+import FloatingHamburger from "../components/FloatingHamburger";
+import { FileText, Mic } from "lucide-react-native";
 
-type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader"> };
+type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; isDark?: boolean; onToggleTheme?: () => void; };
 
 const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 const MIN_INPUT_HEIGHT = 280;
@@ -51,7 +55,8 @@ async function ensureDir() {
   if (!info.exists) await FileSystem.makeDirectoryAsync(AUDIO_DIR, { intermediates: true });
 }
 
-export default function ReaderScreen({ navigation }: Props) {
+export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Props) {
+  const theme = useTheme();
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [selectedVoice, setSelectedVoice] = useState<Voice>(VOICES[0]);
@@ -62,13 +67,8 @@ export default function ReaderScreen({ navigation }: Props) {
   const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
   const [savedToast, setSavedToast] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
-  const [isDark, setIsDark] = useState(true);
 
   const soundRef = useRef<Audio.Sound | null>(null);
-
-  const colors = isDark
-    ? { bg: "#0b1020", card: "#111937", text: "#e8ecff", dim: "#8899bb", border: "#2a3568" }
-    : { bg: "#f8f9fa", card: "#ffffff", text: "#111827", dim: "#6b7280", border: "#e5e7eb" };
 
   useEffect(() => {
     ensureDir().then(() => {
@@ -95,21 +95,16 @@ export default function ReaderScreen({ navigation }: Props) {
     setIsGenerating(true);
     try {
       const chunks = chunkText(content);
-      console.log(`[Reader] Text ${content.length} chars → ${chunks.length} chunks`);
-
       await ensureDir();
       const batchId = Date.now();
       const uris: string[] = [];
 
-      // Generate and play first chunk immediately
       const firstB64 = await textToSpeech(chunks[0], selectedVoice.voice);
       const firstFname = `reader-${batchId}-0.wav`;
       const firstUri = AUDIO_DIR + firstFname;
       await FileSystem.writeAsStringAsync(firstUri, firstB64, { encoding: FileSystem.EncodingType.Base64 });
       uris.push(firstUri);
-      console.log(`[Reader] Chunk 1/${chunks.length} OK → ${(firstB64.length / 1024).toFixed(0)}KB`);
 
-      // Start playback immediately
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
       const { sound } = await Audio.Sound.createAsync({ uri: firstUri }, { shouldPlay: true }, (status) => {
         if (status.isLoaded && status.didJustFinish) { setIsPlaying(false); sound.unloadAsync().catch(() => {}); }
@@ -118,7 +113,6 @@ export default function ReaderScreen({ navigation }: Props) {
       setIsPlaying(true);
       setIsGenerating(false);
 
-      // Save placeholder entry immediately (toast + Recordings visibility)
       const entryId = `${batchId}-0`;
       const hist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
       hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, uris: [firstUri], createdAt: Date.now() });
@@ -127,7 +121,6 @@ export default function ReaderScreen({ navigation }: Props) {
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 3000);
 
-      // Generate remaining chunks, then update entry with full URIs
       for (let i = 1; i < chunks.length; i++) {
         try {
           await new Promise(r => setTimeout(r, 2000));
@@ -136,9 +129,7 @@ export default function ReaderScreen({ navigation }: Props) {
           const uri = AUDIO_DIR + fname;
           await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
           uris.push(uri);
-          console.log(`[Reader] Chunk ${i + 1}/${chunks.length} OK — ${chunks[i].length} chars → ${(b64.length / 1024).toFixed(0)}KB`);
         } catch (e: any) {
-          console.log(`[Reader] Chunk ${i + 1}/${chunks.length} FAILED: ${e.message}, retrying...`);
           try {
             await new Promise(r => setTimeout(r, 5000));
             const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
@@ -146,15 +137,10 @@ export default function ReaderScreen({ navigation }: Props) {
             const uri = AUDIO_DIR + fname;
             await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
             uris.push(uri);
-            console.log(`[Reader] Chunk ${i + 1}/${chunks.length} OK after retry`);
-          } catch (e2: any) {
-            console.log(`[Reader] Chunk ${i + 1}/${chunks.length} FAILED after retry: ${e2.message}`);
-          }
+          } catch {}
         }
       }
-      console.log(`[Reader] All done — ${uris.length}/${chunks.length} chunks saved`);
 
-      // Update history with all URIs
       const updatedHist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
       const idx = updatedHist.findIndex((r: {id: string}) => r.id === entryId);
       if (idx >= 0) updatedHist[idx].uris = uris;
@@ -185,113 +171,96 @@ export default function ReaderScreen({ navigation }: Props) {
     setIsImporting(false);
   }
 
-  return (
-    <KeyboardAvoidingView style={[styles.root, { backgroundColor: colors.bg }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <TopBar appName="FreeSurf Reader"
-          colors={{ text: colors.text, dim: colors.dim, card: colors.card, border: colors.border }}
-          menuItems={[
-            { label: "Recordings", onPress: () => navigation.navigate("History", { isDark }) },
-            { label: "Support", onPress: () => Linking.openURL("https://invoices.freesurf.tools/support") },
-            { label: "Privacy & Terms", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
-          ]}
-        />
-      </View>
+  const themeToggleFooter = onToggleTheme ? (
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+      <Switch value={!isDark} onValueChange={onToggleTheme} trackColor={{ true: isDark ? "#ffffff" : "#111827", false: "#555" }} />
+    </View>
+  ) : undefined;
 
-      <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} keyboardShouldPersistTaps="always">
-        <TextInput style={[styles.titleInput, { color: colors.text, borderBottomColor: colors.border }]} placeholder="Document title" placeholderTextColor={colors.dim}
-          value={title} onChangeText={setTitle} />
-        <TextInput style={[styles.textInput, { color: colors.text, minHeight: inputHeight, height: inputHeight }]}
+  const hbColors = {
+    text: theme.colors.onSurface,
+    dim: theme.colors.onSurfaceVariant,
+    card: theme.colors.surface,
+    border: theme.colors.outline,
+  };
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <FloatingHamburger
+        topOffset={48}
+        colors={hbColors}
+        footer={themeToggleFooter}
+        menuItems={[
+          { label: "Recordings", onPress: () => navigation.navigate("History", { isDark }) },
+          { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
+          { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
+          { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
+          { label: "About Us", onPress: () => Alert.alert("About FreeSurf Reader", "FreeSurf Reader transforms text into natural-sounding speech. Just paste or import a document and choose from over 40 voices.\n\nMore free apps are on the way — stay tuned for calorie tracking, transcription, and more.") },
+        ]}
+      />
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flex: 1, padding: 16, paddingTop: 52, paddingBottom: 16 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" decelerationRate={0.998}>
+        <PaperInput mode="flat" style={{ fontSize: 20, fontWeight: "600", backgroundColor: "transparent", marginBottom: 8 }}
+          placeholder="Document title" value={title} onChangeText={setTitle}
+          underlineColor={theme.colors.outline} activeUnderlineColor={theme.colors.primary} />
+
+        <PaperInput mode="flat"
+          style={{ flex: 1, minHeight: inputHeight, fontSize: 17, lineHeight: 26, backgroundColor: "transparent", marginTop: 8 }}
           placeholder="Paste an article, study guide, or document text here..."
-          placeholderTextColor={colors.dim} value={text} onChangeText={setText}
-          multiline scrollEnabled={false} textAlignVertical="top"
-          onContentSizeChange={(e) => setInputHeight(Math.max(MIN_INPUT_HEIGHT, e.nativeEvent.contentSize.height + 24))}
+          value={text} onChangeText={setText}
+          multiline textAlignVertical="top"
+          underlineColor="transparent" activeUnderlineColor="transparent"
         />
       </ScrollView>
 
-      <View style={[styles.readerBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-        {savedToast && <View style={[styles.toast, { backgroundColor: colors.border }]}><Text style={[styles.toastText, { color: colors.text }]}>✓ Saved to Recordings</Text></View>}
+      <Surface style={{ borderTopWidth: 1, borderTopColor: theme.colors.outline, paddingBottom: 32 }} elevation={0}>
+        {savedToast && (
+          <View style={{ paddingVertical: 6, alignItems: "center" }}>
+            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Saved to Recordings</Text>
+          </View>
+        )}
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8 }}>
+          <Button mode="text" onPress={handleImport} loading={isImporting} icon={() => <FileText size={16} color={theme.colors.onSurface} />}
+            textColor={theme.colors.onSurface}>Import</Button>
 
-        <View style={styles.barRow}>
-          <TouchableOpacity style={styles.barBtn} onPress={handleImport} disabled={isImporting}>
-            <FileText size={16} color={colors.text} />
-            <Text style={[styles.barBtnText, { color: colors.text }]}>{isImporting ? "Importing..." : "Import"}</Text>
-          </TouchableOpacity>
-
-          <View style={styles.barRight}>
-            {timeEstimate && !isGenerating && !isPlaying ? (
-              <Text style={[styles.estimate, { color: colors.dim }]}>{timeEstimate}</Text>
-            ) : null}
-
-            <TouchableOpacity style={[styles.playBtn, { backgroundColor: isDark ? "#e8ecff15" : "#1a1a2e10" }]}
-              onPress={handleRead}>
-              <Text style={[styles.playBtnText, { color: colors.text }]}>
-                {isGenerating ? `Preparing${timeEstimate ? ` ${timeEstimate}` : "..."}` : isPlaying ? "Stop" : "Read Aloud"}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.voiceChip, { borderColor: colors.border }]} onPress={() => setShowVoicePicker(true)}>
-              <Text style={[styles.voiceChipText, { color: colors.text }]}>{selectedVoice.label}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setIsDark(!isDark)} style={styles.themeBtn}>
-              {isDark ? <Sun size={18} color={colors.text} /> : <Moon size={18} color={colors.text} />}
-            </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginLeft: "auto", flexShrink: 1 }}>
+            <Button mode="contained-tonal" onPress={handleRead}
+              icon={() => <Mic size={16} color={theme.colors.primary} />}
+              labelStyle={{ fontSize: 13 }}>
+              {isGenerating ? `Preparing...` : isPlaying ? "Stop" : "Read"}
+            </Button>
+            <Button mode="outlined" onPress={() => setShowVoicePicker(true)}
+              textColor={theme.colors.onSurface} labelStyle={{ fontSize: 13 }}
+              style={{ flexShrink: 1 }}>
+              {selectedVoice.label}{' '}
+            </Button>
           </View>
         </View>
-      </View>
+      </Surface>
 
       <Modal visible={showVoicePicker} transparent animationType="slide" onRequestClose={() => setShowVoicePicker(false)}>
-        <TouchableOpacity style={styles.backdrop} onPress={() => setShowVoicePicker(false)} activeOpacity={1}>
-          <View style={[styles.sheet, { backgroundColor: colors.card }]}>
-            <Text style={[styles.sheetTitle, { color: colors.text, borderBottomColor: colors.border }]}>Choose voice</Text>
-            <ScrollView key="voiceList" style={{ maxHeight: 420 }} bounces={false}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowVoicePicker(false)} />
+          <Surface style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 48 }}>
+            <Text variant="titleMedium" style={{ fontWeight: "700", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>Choose voice</Text>
+            <ScrollView style={{ maxHeight: 420 }} bounces={false}>
               {VOICES.map(v => (
-                <TouchableOpacity key={v.id} style={[styles.voiceOption, selectedVoice.id === v.id && styles.voiceSelected, { borderBottomColor: colors.border }]}
-                  onPress={() => { setSelectedVoice(v); setShowVoicePicker(false); }}>
-                  <Text style={[styles.voiceLabel, { color: colors.text }]}>{selectedVoice.id === v.id ? "● " : "  "}{v.label}</Text>
-                  <Text style={[styles.voiceDesc, { color: colors.dim }]}>{v.description}</Text>
-                </TouchableOpacity>
+                <View key={v.id} style={{ borderBottomWidth: 0.5, borderBottomColor: theme.colors.outline }}>
+                  <Button mode="text" onPress={() => { setSelectedVoice(v); setShowVoicePicker(false); }}
+                    contentStyle={{ flexDirection: "column", alignItems: "flex-start", paddingVertical: 12, paddingHorizontal: 20, gap: 2 }}
+                    textColor={selectedVoice.id === v.id ? theme.colors.primary : theme.colors.onSurface}>
+                    <View style={{ flexDirection: "row", gap: 4 }}>
+                      {selectedVoice.id === v.id && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.primary, alignSelf: "center" }} />}
+                      <Text style={{ fontWeight: selectedVoice.id === v.id ? "700" : "400", fontSize: 15 }}>{v.label} </Text>
+                    </View>
+                    <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2, marginLeft: selectedVoice.id === v.id ? 10 : 0 }}>{v.description}</Text>
+                  </Button>
+                </View>
               ))}
             </ScrollView>
-          </View>
-        </TouchableOpacity>
+          </Surface>
+        </View>
       </Modal>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  header: { paddingTop: 42, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1 },
-
-  body: { flex: 1 },
-  bodyContent: { padding: 24, paddingBottom: 24 },
-
-  titleInput: { fontSize: 22, fontWeight: "600", paddingBottom: 14, marginBottom: 14, borderBottomWidth: 1 },
-  textInput: { fontSize: 18, lineHeight: 28 },
-
-  readerBar: { borderTopWidth: 1, paddingBottom: 36 },
-  toast: { backgroundColor: "#0d6b61", paddingVertical: 8, paddingHorizontal: 16, alignItems: "center" },
-  toastText: { color: "#fff", fontSize: 13, fontWeight: "700" },
-  barRow: { minHeight: 56, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 4 },
-  barBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
-  barBtnText: { fontSize: 14, fontWeight: "600" },
-  barRight: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 8 },
-  estimate: { fontSize: 12, fontWeight: "600" },
-  playBtn: { flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 9, borderRadius: 22 },
-  playBtnActive: { backgroundColor: "#5b8cff" },
-  playBtnText: { fontSize: 14, fontWeight: "700" },
-  playBtnTextActive: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  voiceChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1 },
-  voiceChipText: { fontSize: 12, fontWeight: "600" },
-  themeBtn: { padding: 4, marginLeft: 4 },
-
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  sheet: { borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 56 },
-  sheetTitle: { fontSize: 16, fontWeight: "700", padding: 16, borderBottomWidth: 1 },
-  voiceOption: { paddingVertical: 14, paddingHorizontal: 20, borderBottomWidth: StyleSheet.hairlineWidth },
-  voiceSelected: { backgroundColor: "#5b8cff15" },
-  voiceLabel: { fontSize: 15 },
-  voiceDesc: { fontSize: 12, marginTop: 2 },
-});

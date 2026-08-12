@@ -56,16 +56,16 @@ export default function ConsentScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0b1020",
+    backgroundColor: "#000000",
     justifyContent: "center",
     padding: 24,
   },
   card: {
-    backgroundColor: "#111937",
+    backgroundColor: "#0d0d0d",
     borderRadius: 20,
     padding: 28,
     borderWidth: 1,
-    borderColor: "#2a3568",
+    borderColor: "#1a1a1a",
     alignItems: "center",
   },
   icon: { fontSize: 48, marginBottom: 12 },
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: "#5b8cff", marginTop: 2, marginBottom: 4 },
   divider: {
     height: 1,
-    backgroundColor: "#2a3568",
+    backgroundColor: "#1a1a1a",
     alignSelf: "stretch",
     marginVertical: 20,
   },

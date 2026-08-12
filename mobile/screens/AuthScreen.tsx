@@ -51,19 +51,19 @@ export default function AuthScreen({ onAuthenticated, onBack }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0b1020" },
+  root: { flex: 1, backgroundColor: "#000000" },
   inner: { padding: 28, paddingTop: 72, gap: 14 },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   brand: { fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#5b8cff", marginBottom: 4 },
   closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center" },
   closeBtnText: { fontSize: 14, color: "#5f6b7a", lineHeight: 16 },
   heading: { fontSize: 28, fontWeight: "700", color: "#e8ecff", marginBottom: 8 },
-  tabs: { flexDirection: "row", borderWidth: 1, borderColor: "#2a3568", borderRadius: 999, padding: 4 },
+  tabs: { flexDirection: "row", borderWidth: 1, borderColor: "#1a1a1a", borderRadius: 999, padding: 4 },
   tab: { flex: 1, borderRadius: 999, paddingVertical: 10, alignItems: "center" },
   tabActive: { backgroundColor: "#1e2a4a" },
   tabLabel: { fontSize: 14, fontWeight: "500", color: "#5f6b7a" },
   tabActiveLabel: { color: "#5b8cff", fontWeight: "700" },
-  input: { backgroundColor: "#111937", borderWidth: 1, borderColor: "#2a3568", borderRadius: 12, padding: 14, fontSize: 15, color: "#e8ecff" },
+  input: { backgroundColor: "#0d0d0d", borderWidth: 1, borderColor: "#1a1a1a", borderRadius: 12, padding: 14, fontSize: 15, color: "#e8ecff" },
   message: { color: "#f87171", fontSize: 13 },
   button: { backgroundColor: "#5b8cff", borderRadius: 12, padding: 16, alignItems: "center", marginTop: 8 },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },

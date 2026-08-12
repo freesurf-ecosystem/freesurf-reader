@@ -10,7 +10,7 @@ type Props = {
   colors?: { text: string; dim: string; card: string; border: string };
 };
 
-const DARK = { text: "#e8ecff", dim: "#8899bb", card: "#111937", border: "#2a3568" };
+const DARK = { text: "#e8ecff", dim: "#8899bb", card: "#0d0d0d", border: "#1a1a1a" };
 
 export default function TopBar({ appName, onSignIn, onSignOut, isLoggedIn, menuItems, colors }: Props) {
   const [open, setOpen] = useState(false);
