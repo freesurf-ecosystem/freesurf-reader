@@ -5,8 +5,7 @@
  */
 
 export interface Env {
-  RUNPOD_API_KEY: string;
-  RUNPOD_ENDPOINT_ID: string;
+  POD_URL: string;
   OPENROUTER_API_KEY?: string;
 }
 
@@ -144,35 +143,27 @@ export default {
           return jsonResponse({ error: "No text provided" }, 400, headers);
         }
 
-        const runpodRes = await fetch(
-          `https://api.runpod.ai/v2/${env.RUNPOD_ENDPOINT_ID}/runsync`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${env.RUNPOD_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              input: {
-                text: body.text,
-                voice: body.voice || "af_heart",
-                speed: body.speed || 1.0,
-                response_format: "mp3",
-              },
-            }),
-          }
-        );
+        const podRes = await fetch(env.POD_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            task_type: "tts",
+            text: body.text,
+            voice: body.voice || "af_heart",
+            speed: body.speed || 1.0,
+          }),
+        });
 
-        const runpodData = (await runpodRes.json()) as {
-          output?: { audio_base64?: string };
+        const podData = (await podRes.json()) as {
+          audio_base64?: string;
           error?: string;
         };
 
-        if (runpodData.error) {
-          return jsonResponse({ error: runpodData.error }, 500, headers);
+        if (!podRes.ok || podData.error) {
+          return jsonResponse({ error: podData.error || "TTS failed" }, podRes.status || 500, headers);
         }
 
-        const audioBase64 = runpodData.output?.audio_base64;
+        const audioBase64 = podData.audio_base64;
         if (!audioBase64) {
           return jsonResponse(
             { error: "No audio returned from TTS service" },
