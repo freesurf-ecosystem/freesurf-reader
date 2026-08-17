@@ -115,7 +115,7 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
 
       const entryId = `${batchId}-0`;
       const hist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
-      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, uris: [firstUri], createdAt: Date.now() });
+      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, uris: [firstUri], processing: chunks.length > 1, createdAt: Date.now() });
       await safeWriteHistory(hist.slice(0, 50));
       setHistoryCount(Math.min(hist.length, 50));
       setSavedToast(true);
@@ -143,7 +143,7 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
 
       const updatedHist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
       const idx = updatedHist.findIndex((r: {id: string}) => r.id === entryId);
-      if (idx >= 0) updatedHist[idx].uris = uris;
+      if (idx >= 0) { updatedHist[idx].uris = uris; updatedHist[idx].processing = false; }
       await safeWriteHistory(updatedHist);
     } catch (e: any) {
       setIsGenerating(false);
@@ -199,16 +199,16 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
         ]}
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flex: 1, padding: 16, paddingTop: 52, paddingBottom: 16 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" decelerationRate={0.998}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingTop: 48, paddingBottom: 8 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" decelerationRate={0.998}>
         <PaperInput mode="flat" style={{ fontSize: 20, fontWeight: "600", backgroundColor: "transparent", marginBottom: 8 }}
           placeholder="Document title" value={title} onChangeText={setTitle}
           underlineColor={theme.colors.outline} activeUnderlineColor={theme.colors.primary} />
 
         <PaperInput mode="flat"
-          style={{ flex: 1, minHeight: inputHeight, fontSize: 17, lineHeight: 26, backgroundColor: "transparent", marginTop: 8 }}
+          style={{ minHeight: inputHeight, fontSize: 17, lineHeight: 26, backgroundColor: "transparent", marginTop: 8 }}
           placeholder="Paste an article, study guide, or document text here..."
           value={text} onChangeText={setText}
-          multiline textAlignVertical="top"
+          multiline textAlignVertical="top" scrollEnabled={false}
           underlineColor="transparent" activeUnderlineColor="transparent"
         />
       </ScrollView>

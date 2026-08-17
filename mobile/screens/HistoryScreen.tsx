@@ -1,5 +1,5 @@
-import React, { useCallback, useRef, useState } from "react";
-import { Alert, FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Alert, FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -12,7 +12,7 @@ import { Play, Pause, Share2, X, EllipsisVertical } from "lucide-react-native";
 
 const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
 
-interface Recording { id: string; title: string; text: string; voice: string; uri: string; uris?: string[]; createdAt: number; }
+interface Recording { id: string; title: string; text: string; voice: string; uri: string; uris?: string[]; processing?: boolean; createdAt: number; }
 
 type Props = NativeStackScreenProps<RootStackParamList, "History">;
 
@@ -56,6 +56,14 @@ export default function HistoryScreen({ navigation, route }: Props) {
       try { const r = JSON.parse(raw); setRecordings(r); } catch { setRecordings([]); }
     } catch { setRecordings([]); }
   }
+
+  const hasProcessing = recordings.some((r) => r.processing);
+  useEffect(() => {
+    if (!hasProcessing) return;
+    const id = setInterval(loadHistory, 3000);
+    return () => clearInterval(id);
+  }, [hasProcessing]);
+
   async function persist(u: Recording[]) { await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(u)); setRecordings(u); }
 
   const nextSoundRef = useRef<Audio.Sound | null>(null);
@@ -150,6 +158,12 @@ export default function HistoryScreen({ navigation, route }: Props) {
                   {item.voice} · {formatDate(item.createdAt)}
                   {isActive && (item.uris?.length || 0) > 1 ? ` · part ${chunkIndex + 1}/${item.uris?.length}` : ""}
                 </Text>
+                {item.processing && (
+                  <View style={s.processing}>
+                    <ActivityIndicator size="small" color={c.accent} />
+                    <Text style={[s.processingT, { color: c.dim }]}>Processing audio...</Text>
+                  </View>
+                )}
               </>
             )}
           </View>
@@ -225,6 +239,8 @@ const s = StyleSheet.create({
   info: { flex: 1 },
   title: { fontSize: 15, fontWeight: "600", marginBottom: 2 },
   meta: { fontSize: 12 },
+  processing: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 },
+  processingT: { fontSize: 11 },
   input: { fontSize: 14, fontWeight: "600", borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   menuBtn: { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   progRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 10 },
