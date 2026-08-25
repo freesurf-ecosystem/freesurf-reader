@@ -195,14 +195,15 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
           { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
           { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
           { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
-          { label: "About Us", onPress: () => Alert.alert("About FreeSurf Reader", "FreeSurf Reader transforms text into natural-sounding speech. Just paste or import a document and choose from over 40 voices.\n\nMore free apps are on the way — stay tuned for calorie tracking, transcription, and more.") },
+          { label: "About Us", onPress: () => Alert.alert("About FreeSurf Reader", "FreeSurf Reader transforms text into natural-sounding speech. Just paste or import a document and choose from 23 languages.\n\nMore free apps are on the way — stay tuned for calorie tracking, transcription, and more.") },
         ]}
       />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingTop: 48, paddingBottom: 8 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" decelerationRate={0.998}>
         <PaperInput mode="flat" style={{ fontSize: 20, fontWeight: "600", backgroundColor: "transparent", marginBottom: 8 }}
           placeholder="Document title" value={title} onChangeText={setTitle}
-          underlineColor={theme.colors.outline} activeUnderlineColor={theme.colors.primary} />
+          underlineColor={theme.colors.outline} activeUnderlineColor={theme.colors.primary}
+          cursorColor={theme.colors.primary} selectionColor={theme.colors.primary} />
 
         <PaperInput mode="flat"
           style={{ minHeight: inputHeight, fontSize: 17, lineHeight: 26, backgroundColor: "transparent", marginTop: 8 }}
@@ -210,6 +211,7 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
           value={text} onChangeText={setText}
           multiline textAlignVertical="top" scrollEnabled={false}
           underlineColor="transparent" activeUnderlineColor="transparent"
+          cursorColor={theme.colors.primary} selectionColor={theme.colors.primary}
         />
       </ScrollView>
 
@@ -242,7 +244,7 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowVoicePicker(false)} />
           <Surface style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 48 }}>
-            <Text variant="titleMedium" style={{ fontWeight: "700", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>Choose voice</Text>
+            <Text variant="titleMedium" style={{ fontWeight: "700", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>Choose language</Text>
             <ScrollView style={{ maxHeight: 420 }} bounces={false}>
               {VOICES.map(v => (
                 <View key={v.id} style={{ borderBottomWidth: 0.5, borderBottomColor: theme.colors.outline }}>
