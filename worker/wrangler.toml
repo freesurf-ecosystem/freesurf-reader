@@ -11,3 +11,5 @@ ENVIRONMENT = "production"
 
 # Secrets to set via `wrangler secret put`:
 #   POD_URL   — the consolidated AI pod URL (e.g. https://<pod-id>-8000.proxy.runpod.net)
+#   TOGETHER_API_KEY - when set, TTS runs on Together Kokoro (hosted) instead of the pod
+#   TOGETHER_TTS_VOICE - optional default Kokoro voice override

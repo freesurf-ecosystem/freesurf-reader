@@ -7,6 +7,53 @@
 export interface Env {
   POD_URL: string;
   OPENROUTER_API_KEY?: string;
+  TOGETHER_API_KEY?: string;
+  TOGETHER_TTS_VOICE?: string;
+}
+
+// Kokoro language→voice defaults (used when the client sends a language code).
+const KOKORO_LANG_VOICE: Record<string, string> = {
+  en: "af_heart", es: "ef_dora", fr: "ff_siwis", zh: "zf_xiaobei", ja: "jf_alpha",
+};
+// A small allowlist of valid Kokoro voice ids (avoids sending garbage to the API).
+const KOKORO_VOICES = new Set([
+  "af_heart","af_alloy","af_aoede","af_bella","af_jessica","af_kore","af_nicole","af_nova","af_river","af_sarah","af_sky",
+  "am_adam","am_echo","am_eric","am_fenrir","am_liam","am_michael","am_onyx","am_puck","am_santa",
+  "bf_alice","bf_emma","bf_isabella","bf_lily","bm_daniel","bm_fable","bm_george","bm_lewis",
+  "jf_alpha","jf_gongitsune","jf_nezumi","jf_tebukuro","jm_kumo",
+  "zf_xiaobei","zf_xiaoni","zf_xiaoxiao","zf_xiaoyi","zm_yunjian","zm_yunxi","zm_yunxia","zm_yunyang",
+  "ef_dora","em_alex","em_santa","ff_siwis","hf_alpha","hf_beta","hm_omega","hm_psi","if_sara","im_nicola",
+  "pf_dora","pm_alex","pm_santa",
+]);
+
+function pickKokoroVoice(voice: string | undefined, env: Env): string {
+  const candidate = env.TOGETHER_TTS_VOICE || voice || "en";
+  if (KOKORO_VOICES.has(candidate)) return candidate;
+  const lang = String(candidate).toLowerCase();
+  return KOKORO_LANG_VOICE[lang] || "af_heart";
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
+async function ttsWithTogether(apiKey: string, text: string, voice: string): Promise<{ audio_base64: string }> {
+  const res = await fetch("https://api.together.ai/v1/audio/speech", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model: "hexgrad/Kokoro-82M", input: text, voice, response_format: "wav", sample_rate: 24000 }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `Together TTS error ${res.status}`);
+  }
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return { audio_base64: bytesToBase64(bytes) };
 }
 
 const ALLOWED_ORIGINS = [
@@ -141,6 +188,17 @@ export default {
 
         if (!body.text?.trim()) {
           return jsonResponse({ error: "No text provided" }, 400, headers);
+        }
+
+        // Hosted Together Kokoro path. Falls back to the pod when no key is set.
+        if (env.TOGETHER_API_KEY) {
+          const voice = pickKokoroVoice(body.voice, env);
+          try {
+            const out = await ttsWithTogether(env.TOGETHER_API_KEY, body.text, voice);
+            return jsonResponse(out, 200, headers);
+          } catch (e: unknown) {
+            return jsonResponse({ error: e instanceof Error ? e.message : "TTS failed" }, 500, headers);
+          }
         }
 
         const podRes = await fetch(env.POD_URL, {
