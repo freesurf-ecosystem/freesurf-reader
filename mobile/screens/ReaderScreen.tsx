@@ -208,10 +208,12 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
         <PaperInput mode="flat"
           style={{ minHeight: inputHeight, fontSize: 17, lineHeight: 26, backgroundColor: "transparent", marginTop: 8 }}
           placeholder="Paste an article, study guide, or document text here..."
+          placeholderTextColor={theme.colors.onSurfaceVariant}
           value={text} onChangeText={setText}
           multiline textAlignVertical="top" scrollEnabled={false}
           underlineColor="transparent" activeUnderlineColor="transparent"
           cursorColor={theme.colors.primary} selectionColor={theme.colors.primary}
+          theme={{ colors: { primary: theme.colors.primary, text: theme.colors.onSurface } }}
         />
       </ScrollView>
 
