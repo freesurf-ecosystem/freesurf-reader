@@ -9,6 +9,88 @@ export interface Env {
   OPENROUTER_API_KEY?: string;
   TOGETHER_API_KEY?: string;
   TOGETHER_TTS_VOICE?: string;
+  // Usage metering (shared FreeSurf Supabase). When these are set, TTS is gated by the
+  // weekly free allowance. Without them, the app runs unmetered (existing behavior).
+  SUPABASE_URL?: string;
+  SUPABASE_ANON_KEY?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  READER_WEEKLY_CHARS?: string;
+}
+
+const READER_METRIC = "reader_chars";
+const DEFAULT_WEEKLY_CHARS = 30000;
+
+// Monday (UTC) of the current week, as yyyy-mm-dd — weekly allowance bucket.
+function weekStartIso(now: Date): string {
+  const day = (now.getUTCDay() + 6) % 7; // 0 = Monday
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - day));
+  return monday.toISOString().slice(0, 10);
+}
+
+function srHeaders(env: Env): Record<string, string> {
+  return {
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY || "",
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY || ""}`,
+  };
+}
+
+// Resolve the signed-in user id from the Authorization Bearer token (Supabase auth).
+async function authedUserId(env: Env, authHeader: string): Promise<string | null> {
+  if (!authHeader.startsWith("Bearer ") || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return null;
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: authHeader },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { id?: string };
+    return data?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+async function readUsage(env: Env, userId: string, metric: string, week: string): Promise<number> {
+  try {
+    const q = new URLSearchParams({
+      user_id: `eq.${userId}`, metric: `eq.${metric}`, week_start: `eq.${week}`, select: "count",
+    });
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/usage?${q.toString()}`, { headers: srHeaders(env) });
+    if (!res.ok) return 0;
+    const rows = (await res.json()) as any[];
+    return Number(rows?.[0]?.count) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function incrementUsage(env: Env, userId: string, metric: string, week: string, delta: number): Promise<number> {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/meter_usage`, {
+    method: "POST",
+    headers: { ...srHeaders(env), "Content-Type": "application/json" },
+    body: JSON.stringify({ p_user_id: userId, p_metric: metric, p_week: week, p_delta: delta }),
+  });
+  if (!res.ok) return 0;
+  const n = Number(await res.text());
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Metered only when Supabase is configured. Returns { ok, userId?, usage? } — when not
+// configured this allows everything (keeps prod working until secrets are set).
+async function gateTtsUsage(env: Env, request: Request, delta: number): Promise<{
+  ok: boolean; userId?: string; usage?: { metric: string; used: number; limit: number; reset: string };
+}> {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY || !env.SUPABASE_URL) return { ok: true };
+  const userId = await authedUserId(env, request.headers.get("Authorization") || "");
+  if (!userId) return { ok: false, userId: undefined, usage: undefined }; // caller returns 401
+  const week = weekStartIso(new Date());
+  const limit = Math.max(0, Number(env.READER_WEEKLY_CHARS) || DEFAULT_WEEKLY_CHARS);
+  const used = await readUsage(env, userId, READER_METRIC, week);
+  if (used + delta > limit) {
+    return { ok: false, userId, usage: { metric: READER_METRIC, used, limit, reset: week } };
+  }
+  await incrementUsage(env, userId, READER_METRIC, week, delta);
+  const newUsed = used + delta;
+  return { ok: true, userId, usage: { metric: READER_METRIC, used: newUsed, limit, reset: week } };
 }
 
 // Kokoro language→voice defaults (used when the client sends a language code).
@@ -70,8 +152,8 @@ function corsHeaders(origin: string): Record<string, string> {
   );
   return {
     "Access-Control-Allow-Origin": allowed ? origin : "",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
   };
 }
 
@@ -90,6 +172,23 @@ export default {
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers });
+    }
+
+    // ── Usage meter (GET /api/usage) — how much of the weekly allowance is left ──
+    if (request.method === "GET" && url.pathname === "/api/usage") {
+      if (!env.SUPABASE_SERVICE_ROLE_KEY || !env.SUPABASE_URL) {
+        return jsonResponse({ error: "Usage metering not configured" }, 500, headers);
+      }
+      const userId = await authedUserId(env, request.headers.get("Authorization") || "");
+      if (!userId) return jsonResponse({ error: "Unauthorized" }, 401, headers);
+      const week = weekStartIso(new Date());
+      const limit = Math.max(0, Number(env.READER_WEEKLY_CHARS) || DEFAULT_WEEKLY_CHARS);
+      const used = await readUsage(env, userId, READER_METRIC, week);
+      return jsonResponse(
+        { usage: { metric: READER_METRIC, used, limit, reset: week } },
+        200,
+        headers
+      );
     }
 
     if (request.method !== "POST") {
@@ -188,6 +287,19 @@ export default {
 
         if (!body.text?.trim()) {
           return jsonResponse({ error: "No text provided" }, 400, headers);
+        }
+
+        // Weekly free allowance gate (only active when Supabase metering is configured).
+        const gate = await gateTtsUsage(env, request, body.text.length);
+        if (!gate.ok) {
+          if (gate.usage) {
+            return jsonResponse(
+              { error: "Weekly limit reached — upgrade or try again next week.", usage: gate.usage },
+              429,
+              headers
+            );
+          }
+          return jsonResponse({ error: "Please sign in to use the reader." }, 401, headers);
         }
 
         // Hosted Together Kokoro path. Falls back to the pod when no key is set.
