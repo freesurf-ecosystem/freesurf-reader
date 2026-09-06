@@ -2,13 +2,11 @@ import React, { useState, useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, AppState, Platform, View } from "react-native";
+import { AppState, Platform } from "react-native";
 import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
 import { requestTrackingPermissionsAsync, getTrackingPermissionsAsync } from "expo-tracking-transparency";
 import ReaderScreen from "./screens/ReaderScreen";
 import HistoryScreen from "./screens/HistoryScreen";
-import Onboarding from "./screens/Onboarding";
-import { supabase } from "./lib/supabase";
 
 const darkTheme = {
   ...MD3DarkTheme,
@@ -55,13 +53,6 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   const [isDark, setIsDark] = useState(true);
-  const [session, setSession] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(Boolean(data.session)));
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, s) => setSession(Boolean(s)));
-    return () => listener?.subscription.unsubscribe();
-  }, []);
 
   useEffect(() => {
     if (Platform.OS !== "ios") return;
@@ -72,10 +63,8 @@ export default function App() {
       requested = true;
       try {
         const { status } = await getTrackingPermissionsAsync();
-        console.log("[ATT] initial status:", status);
         if (status === "undetermined") {
-          const req = await requestTrackingPermissionsAsync();
-          console.log("[ATT] requested, new status:", req.status);
+          await requestTrackingPermissionsAsync();
         }
       } catch (e: any) {
         console.log("[ATT] error:", e?.message || e);
@@ -92,25 +81,17 @@ export default function App() {
 
   return (
     <PaperProvider theme={isDark ? darkTheme : lightTheme}>
-      <StatusBar style={isDark ? "light" : "dark"} />
-      {session === null ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: isDark ? darkTheme.colors.background : lightTheme.colors.background }}>
-          <ActivityIndicator color={isDark ? "#5b8cff" : "#3b6cff"} />
-        </View>
-      ) : !session ? (
-        <Onboarding onAuthenticated={() => {}} />
-      ) : (
-        <NavigationContainer>
-          <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: isDark ? darkTheme.colors.background : lightTheme.colors.background }, animation: "slide_from_right" }}>
-            <Stack.Screen name="Reader">{(props) => (
-              <ReaderScreen navigation={props.navigation} isDark={isDark} onToggleTheme={() => setIsDark(!isDark)} />
-            )}</Stack.Screen>
-            <Stack.Screen name="History">{(props) => (
-              <HistoryScreen {...props} />
-            )}</Stack.Screen>
-          </Stack.Navigator>
-        </NavigationContainer>
-      )}
+      <NavigationContainer>
+        <StatusBar style={isDark ? "light" : "dark"} />
+        <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: isDark ? darkTheme.colors.background : lightTheme.colors.background }, animation: "slide_from_right" }}>
+          <Stack.Screen name="Reader">{(props) => (
+            <ReaderScreen navigation={props.navigation} isDark={isDark} onToggleTheme={() => setIsDark(!isDark)} />
+          )}</Stack.Screen>
+          <Stack.Screen name="History">{(props) => (
+            <HistoryScreen {...props} />
+          )}</Stack.Screen>
+        </Stack.Navigator>
+      </NavigationContainer>
     </PaperProvider>
   );
 }
