@@ -13,7 +13,7 @@ export interface Env {
   // weekly free allowance. Without them, the app runs unmetered (existing behavior).
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
-  SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_SECRET_KEY?: string;
   USAGE_METERING?: string;
   READER_WEEKLY_CHARS?: string;
 }
@@ -30,8 +30,8 @@ function weekStartIso(now: Date): string {
 
 function srHeaders(env: Env): Record<string, string> {
   return {
-    apikey: env.SUPABASE_SERVICE_ROLE_KEY || "",
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY || ""}`,
+    apikey: env.SUPABASE_SECRET_KEY || "",
+    Authorization: `Bearer ${env.SUPABASE_SECRET_KEY || ""}`,
   };
 }
 
@@ -80,7 +80,7 @@ async function incrementUsage(env: Env, userId: string, metric: string, week: st
 async function gateTtsUsage(env: Env, request: Request, delta: number): Promise<{
   ok: boolean; userId?: string; usage?: { metric: string; used: number; limit: number; reset: string };
 }> {
-  if (env.USAGE_METERING !== "on" || !env.SUPABASE_SERVICE_ROLE_KEY || !env.SUPABASE_URL) return { ok: true };
+  if (env.USAGE_METERING !== "on" || !env.SUPABASE_SECRET_KEY || !env.SUPABASE_URL) return { ok: true };
   const userId = await authedUserId(env, request.headers.get("Authorization") || "");
   if (!userId) return { ok: false, userId: undefined, usage: undefined }; // caller returns 401
   const week = weekStartIso(new Date());
@@ -177,7 +177,7 @@ export default {
 
     // ── Usage meter (GET /api/usage) — how much of the weekly allowance is left ──
     if (request.method === "GET" && url.pathname === "/api/usage") {
-      if (env.USAGE_METERING !== "on" || !env.SUPABASE_SERVICE_ROLE_KEY || !env.SUPABASE_URL) {
+      if (env.USAGE_METERING !== "on" || !env.SUPABASE_SECRET_KEY || !env.SUPABASE_URL) {
         return jsonResponse({ error: "Usage metering not configured" }, 500, headers);
       }
       const userId = await authedUserId(env, request.headers.get("Authorization") || "");
