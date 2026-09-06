@@ -143,7 +143,7 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "http://localhost:8081",
   "exp://",
-  "https://Free Surf.tools",
+  "https://freesurf.tools",
 ];
 
 function corsHeaders(origin: string): Record<string, string> {
