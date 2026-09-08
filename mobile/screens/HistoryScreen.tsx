@@ -244,7 +244,6 @@ export default function HistoryScreen({ navigation, route }: Props) {
               { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
               { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
               { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
-              { label: "About Us", onPress: () => Alert.alert("FreeSurf Reader", "Transforms text into natural-sounding speech.") },
             ]} />
         </View>
       </View>
