@@ -17,7 +17,7 @@ import { textToSpeech, VOICES, type Voice } from "../lib/tts";
 import FloatingHamburger from "../components/FloatingHamburger";
 import { FileText, Mic, Home, Play, Pause } from "lucide-react-native";
 
-type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; isDark?: boolean; onToggleTheme?: () => void; };
+type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; noteId?: string; isDark?: boolean; onToggleTheme?: () => void; };
 
 const AUDIO_DIR = FileSystem.documentDirectory + "reader-audio/";
 const MIN_INPUT_HEIGHT = 280;
@@ -56,9 +56,10 @@ async function ensureDir() {
   if (!info.exists) await FileSystem.makeDirectoryAsync(AUDIO_DIR, { intermediates: true });
 }
 
-export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Props) {
+export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [selectedVoice, setSelectedVoice] = useState<Voice>(VOICES[0]);
@@ -110,6 +111,25 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
     });
   }, []);
 
+  // If opened with a noteId, load that note (title/text) and re-attach its audio.
+  useEffect(() => {
+    if (!noteId) return;
+    ensureDir().then(() => {
+      FileSystem.readAsStringAsync(HISTORY_PATH).then(j => {
+        const arr = JSON.parse(j) || [];
+        const it = arr.find((r: any) => r.id === noteId);
+        if (it) {
+          setEditingId(it.id);
+          setTitle(it.title || "");
+          setText(it.text || "");
+          const us = (it.uris && it.uris.length ? it.uris : [it.uri]).filter(Boolean);
+          if (us.length) setNoteUris(us);
+          setHistoryCount(arr.length);
+        }
+      }).catch(() => {});
+    }).catch(() => {});
+  }, [noteId]);
+
   const timeEstimate = useMemo(() => {
     const len = (text || "").trim().length;
     if (!len) return null;
@@ -131,7 +151,6 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
       const batchId = Date.now();
       const uris: string[] = [];
 
-      const entryId = `${batchId}`;
       // Generate ALL chunks first (audio attaches to this note in the editor, no separate screen).
       for (let i = 0; i < chunks.length; i++) {
         if (i > 0) await new Promise(r => setTimeout(r, 2000));
@@ -151,11 +170,20 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
         }
       }
 
-      // Save the note + its audio as one package.
-      const hist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
-      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: uris[0], uris, processing: false, createdAt: Date.now() });
+      // Save the note + its audio as one package (update the open note, or add a new one).
+      const savedAt = Date.now();
+      const savedId = editingId || `${savedAt}`;
+      let hist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
+      if (editingId) {
+        const idx = hist.findIndex((r: any) => r.id === editingId);
+        const rec = { id: editingId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: uris[0], uris, processing: false, createdAt: (idx >= 0 ? hist[idx].createdAt : null) || savedAt };
+        if (idx >= 0) hist[idx] = rec; else hist.unshift(rec);
+      } else {
+        hist.unshift({ id: savedId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: uris[0], uris, processing: false, createdAt: savedAt });
+      }
       await safeWriteHistory(hist.slice(0, 50));
       setHistoryCount(Math.min(hist.length, 50));
+      setEditingId(savedId);
       setIsGenerating(false);
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 3000);

@@ -45,7 +45,7 @@ const lightTheme = {
 };
 
 export type RootStackParamList = {
-  Reader: { isDark?: boolean } | undefined;
+  Reader: { isDark?: boolean; noteId?: string } | undefined;
   History: { isDark?: boolean } | undefined;
 };
 
@@ -85,7 +85,7 @@ export default function App() {
         <StatusBar style={isDark ? "light" : "dark"} />
         <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: isDark ? darkTheme.colors.background : lightTheme.colors.background }, animation: "slide_from_right" }}>
           <Stack.Screen name="Reader">{(props) => (
-            <ReaderScreen navigation={props.navigation} isDark={isDark} onToggleTheme={() => setIsDark(!isDark)} />
+            <ReaderScreen navigation={props.navigation} noteId={props.route.params?.noteId} isDark={isDark} onToggleTheme={() => setIsDark(!isDark)} />
           )}</Stack.Screen>
           <Stack.Screen name="History">{(props) => (
             <HistoryScreen {...props} />

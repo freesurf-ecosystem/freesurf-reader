@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Linking, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import FloatingHamburger from "../components/FloatingHamburger";
-import { Play, Pause, Share2, X, EllipsisVertical } from "lucide-react-native";
+import { Play, Pause, Share2, X, EllipsisVertical, Plus } from "lucide-react-native";
 
 const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
 
@@ -45,7 +45,6 @@ export default function HistoryScreen({ navigation, route }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [expandedTextId, setExpandedTextId] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const progW = useRef(0);
 
@@ -150,15 +149,17 @@ export default function HistoryScreen({ navigation, route }: Props) {
             {isActive ? <Pause size={18} color={c.bg} /> : <Play size={18} color={c.text} />}
           </TouchableOpacity>
           <View style={s.info}>
-            {isEditing ? (
-              <TextInput style={[s.input, { color: c.text, borderColor: c.accent, backgroundColor: c.bg }]} value={editingTitle} onChangeText={setEditingTitle} onSubmitEditing={saveRename} onBlur={cancelRename} autoFocus selectTextOnFocus />
-            ) : (
-              <>
-                <Text style={[s.title, { color: c.text }]} numberOfLines={1}>{item.title}</Text>
-                <Text style={[s.meta, { color: c.dim }]}>
-                  {item.voice} · {formatDate(item.createdAt)}
-                  {isActive && (item.uris?.length || 0) > 1 ? ` · part ${chunkIndex + 1}/${item.uris?.length}` : ""}
-                </Text>
+              {isEditing ? (
+                <TextInput style={[s.input, { color: c.text, borderColor: c.accent, backgroundColor: c.bg }]} value={editingTitle} onChangeText={setEditingTitle} onSubmitEditing={saveRename} onBlur={cancelRename} autoFocus selectTextOnFocus />
+              ) : (
+                <>
+                  <TouchableOpacity onPress={() => navigation.navigate("Reader", { noteId: item.id })}>
+                    <Text style={[s.title, { color: c.text }]} numberOfLines={1}>{item.title}</Text>
+                  </TouchableOpacity>
+                  <Text style={[s.meta, { color: c.dim }]}>
+                    {item.voice} · {formatDate(item.createdAt)}
+                    {isActive && (item.uris?.length || 0) > 1 ? ` · part ${chunkIndex + 1}/${item.uris?.length}` : ""}
+                  </Text>
                 {item.processing && (
                   <View style={s.processing}>
                     <ActivityIndicator size="small" color={c.accent} />
@@ -176,13 +177,8 @@ export default function HistoryScreen({ navigation, route }: Props) {
         </View>
 
         {item.text ? (
-          <TouchableOpacity activeOpacity={0.8} onPress={() => setExpandedTextId(expandedTextId === item.id ? null : item.id)}>
-            <Text style={[s.noteText, { color: c.text }]} numberOfLines={expandedTextId === item.id ? undefined : 3}>
-              {item.text}
-            </Text>
-            {expandedTextId !== item.id && (
-              <Text style={[s.noteMore, { color: c.accent }]}>Tap to see full note</Text>
-            )}
+          <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate("Reader", { noteId: item.id })}>
+            <Text style={[s.noteText, { color: c.text }]} numberOfLines={3}>{item.text}</Text>
           </TouchableOpacity>
         ) : null}
 
@@ -231,9 +227,26 @@ export default function HistoryScreen({ navigation, route }: Props) {
 
   return (
     <View style={[s.root, { backgroundColor: c.bg }]}>
-      <FloatingHamburger topOffset={topPad} colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }} menuItems={[{ label: "Dashboard", onPress: () => navigation.goBack() }]} />
-      <FlatList data={recordings} keyExtractor={(r) => r.id} contentContainerStyle={[s.list, { paddingTop: topPad + 48 }]} removeClippedSubviews={false}
-        ListEmptyComponent={<View style={s.empty}><Text style={[s.emptyT, { color: c.text }]}>No recordings yet</Text><Text style={[s.emptyS, { color: c.dim }]}>Generated audio will appear here</Text></View>}
+      {/* Home nav: title, a + to create a new note, and the menu (support etc.) */}
+      <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 200, paddingTop: topPad }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 }}>
+          <Text style={[s.homeTitle, { color: c.text }]}>Your Notes</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+            <TouchableOpacity style={[s.plusBtn, { borderColor: c.border }]} onPress={() => navigation.navigate("Reader", {})} accessibilityRole="button" accessibilityLabel="New note">
+              <Plus size={22} color={c.accent} />
+            </TouchableOpacity>
+            <FloatingHamburger inline topOffset={topPad + 44} colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }}
+              menuItems={[
+                { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
+                { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
+                { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
+                { label: "About Us", onPress: () => Alert.alert("FreeSurf Reader", "Transforms text into natural-sounding speech.") },
+              ]} />
+          </View>
+        </View>
+      </View>
+      <FlatList data={recordings} keyExtractor={(r) => r.id} contentContainerStyle={[s.list, { paddingTop: topPad + 56 }]} removeClippedSubviews={false}
+        ListEmptyComponent={<View style={s.empty}><Text style={[s.emptyT, { color: c.text }]}>No recordings yet</Text><Text style={[s.emptyS, { color: c.dim }]}>Tap + to create your first note</Text></View>}
         renderItem={({ item }) => renderCard(item)} />
     </View>
   );
@@ -242,6 +255,8 @@ export default function HistoryScreen({ navigation, route }: Props) {
 const s = StyleSheet.create({
   root: { flex: 1 },
   list: { padding: 16, paddingBottom: 48 },
+  homeTitle: { fontSize: 20, fontWeight: "800" },
+  plusBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", paddingTop: 80 },
   emptyT: { fontSize: 18, fontWeight: "600", marginBottom: 8 },
   emptyS: { fontSize: 14, textAlign: "center" },
