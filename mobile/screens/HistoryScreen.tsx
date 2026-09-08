@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import FloatingHamburger from "../components/FloatingHamburger";
-import { Play, Pause, Share2, X, EllipsisVertical, Plus } from "lucide-react-native";
+import { Play, Pause, Share2, X, EllipsisVertical, Plus, Pencil } from "lucide-react-native";
 
 const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
 
@@ -208,6 +208,9 @@ export default function HistoryScreen({ navigation, route }: Props) {
             </View>
 
             <View style={[s.actions, { borderTopColor: c.border }]}>
+              <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => navigation.navigate("Reader", { noteId: item.id })}>
+                <Pencil size={16} color={c.text} />
+              </TouchableOpacity>
               {isEditing ? (
                 <>
                   <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={saveRename}><Text style={[s.actT, { color: c.text }]}>Save</Text></TouchableOpacity>
@@ -230,19 +233,19 @@ export default function HistoryScreen({ navigation, route }: Props) {
       {/* Home nav: title, a + to create a new note, and the menu (support etc.) */}
       <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 200, paddingTop: topPad }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 }}>
-          <Text style={[s.homeTitle, { color: c.text }]}>Your Notes</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-            <TouchableOpacity style={[s.plusBtn, { borderColor: c.border }]} onPress={() => navigation.navigate("Reader", {})} accessibilityRole="button" accessibilityLabel="New note">
-              <Plus size={22} color={c.accent} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Text style={[s.homeTitle, { color: c.text }]}>Your Recordings</Text>
+            <TouchableOpacity onPress={() => navigation.navigate("Reader", {})} hitSlop={8} accessibilityRole="button" accessibilityLabel="New note">
+              <Plus size={24} color={c.text} />
             </TouchableOpacity>
-            <FloatingHamburger inline topOffset={topPad + 44} colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }}
-              menuItems={[
-                { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
-                { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
-                { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
-                { label: "About Us", onPress: () => Alert.alert("FreeSurf Reader", "Transforms text into natural-sounding speech.") },
-              ]} />
           </View>
+          <FloatingHamburger inline topOffset={topPad + 44} colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }}
+            menuItems={[
+              { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
+              { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
+              { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
+              { label: "About Us", onPress: () => Alert.alert("FreeSurf Reader", "Transforms text into natural-sounding speech.") },
+            ]} />
         </View>
       </View>
       <FlatList data={recordings} keyExtractor={(r) => r.id} contentContainerStyle={[s.list, { paddingTop: topPad + 56 }]} removeClippedSubviews={false}
