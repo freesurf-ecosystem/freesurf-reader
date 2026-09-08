@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../App";
 import { textToSpeech, VOICES, type Voice } from "../lib/tts";
 import FloatingHamburger from "../components/FloatingHamburger";
+import { translations, useAppLanguage } from "../i18n";
 import { FileText, Mic, Home, Play, Pause } from "lucide-react-native";
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; noteId?: string; isDark?: boolean; onToggleTheme?: () => void; };
@@ -59,6 +60,8 @@ async function ensureDir() {
 export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { lang } = useAppLanguage();
+  const T = translations[lang];
   const [editingId, setEditingId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
@@ -342,13 +345,13 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingTop: 4, paddingBottom: 8 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" decelerationRate={0.998}>
         <PaperInput mode="flat" style={{ fontSize: 20, fontWeight: "600", backgroundColor: "transparent", marginBottom: 8 }}
-          placeholder="Document title" value={title} onChangeText={setTitle}
+          placeholder={T.titlePlaceholder} value={title} onChangeText={setTitle}
           underlineColor={theme.colors.outline} activeUnderlineColor={theme.colors.primary}
           cursorColor={theme.colors.primary} selectionColor={theme.colors.primary} />
 
         <PaperInput mode="flat"
           style={{ minHeight: inputHeight, fontSize: 17, lineHeight: 26, backgroundColor: "transparent", marginTop: 8 }}
-          placeholder="Paste an article, study guide, or document text here..."
+          placeholder={T.textPlaceholder}
           placeholderTextColor={theme.colors.onSurfaceVariant}
           value={text} onChangeText={setText}
           multiline textAlignVertical="top" scrollEnabled={false}
@@ -361,7 +364,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
       <Surface style={{ borderTopWidth: 1, borderTopColor: theme.colors.outline, paddingBottom: 32 }} elevation={0}>
         {savedToast && (
           <View style={{ paddingVertical: 6, alignItems: "center" }}>
-            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Saved to Recordings</Text>
+            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{T.savedToast}</Text>
           </View>
         )}
         {noteUris.length > 0 && (
@@ -399,13 +402,13 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
 
         <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8 }}>
           <Button mode="text" onPress={handleImport} loading={isImporting} icon={() => <FileText size={16} color={theme.colors.onSurface} />}
-            textColor={theme.colors.onSurface}>Import</Button>
+            textColor={theme.colors.onSurface}>{T.importLabel}</Button>
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginLeft: "auto", flexShrink: 1 }}>
             <Button mode="contained-tonal" onPress={handleRead}
               icon={() => <Mic size={16} color={theme.colors.primary} />}
               labelStyle={{ fontSize: 13 }}>
-              {isGenerating ? `Preparing...` : isPlaying ? "Stop" : "Read"}
+              {isGenerating ? T.preparingLabel : isPlaying ? T.stopLabel : T.readLabel}
             </Button>
             <Button mode="outlined" onPress={() => setShowVoicePicker(true)}
               textColor={theme.colors.onSurface} labelStyle={{ fontSize: 13 }}
@@ -420,7 +423,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowVoicePicker(false)} />
           <Surface style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 48 }}>
-            <Text variant="titleMedium" style={{ fontWeight: "700", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>Choose language</Text>
+            <Text variant="titleMedium" style={{ fontWeight: "700", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>{T.voicePickerTitle}</Text>
             <ScrollView style={{ maxHeight: 420 }} bounces={false}>
               {VOICES.map(v => (
                 <View key={v.id} style={{ borderBottomWidth: 0.5, borderBottomColor: theme.colors.outline }}>

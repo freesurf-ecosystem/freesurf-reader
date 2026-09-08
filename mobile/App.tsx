@@ -7,6 +7,8 @@ import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
 import { requestTrackingPermissionsAsync, getTrackingPermissionsAsync } from "expo-tracking-transparency";
 import ReaderScreen from "./screens/ReaderScreen";
 import HistoryScreen from "./screens/HistoryScreen";
+import LanguageChooser from "./screens/LanguageChooser";
+import { useAppLanguage } from "./i18n";
 
 const darkTheme = {
   ...MD3DarkTheme,
@@ -53,6 +55,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   const [isDark, setIsDark] = useState(true);
+  const { loaded: langLoaded, chosen: langChosen, setLanguage } = useAppLanguage();
 
   useEffect(() => {
     if (Platform.OS !== "ios") return;
@@ -78,6 +81,18 @@ export default function App() {
 
     return () => subscription.remove();
   }, []);
+
+  if (!langLoaded) {
+    return <PaperProvider theme={isDark ? darkTheme : lightTheme}><StatusBar style="light" /></PaperProvider>;
+  }
+  if (!langChosen) {
+    return (
+      <PaperProvider theme={isDark ? darkTheme : lightTheme}>
+        <StatusBar style="light" />
+        <LanguageChooser onSelect={setLanguage} />
+      </PaperProvider>
+    );
+  }
 
   return (
     <PaperProvider theme={isDark ? darkTheme : lightTheme}>

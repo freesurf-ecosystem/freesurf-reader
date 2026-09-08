@@ -23,6 +23,7 @@
     "expo-document-picker": "~13.1.6",
     "expo-file-system": "~19.0.22",
     "expo-linking": "~8.0.12",
+    "expo-localization": "~17.0.9",
     "expo-sharing": "~14.0.8",
     "expo-status-bar": "~3.0.9",
     "expo-tracking-transparency": "~6.0.8",

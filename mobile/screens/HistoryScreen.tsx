@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import FloatingHamburger from "../components/FloatingHamburger";
+import { translations, useAppLanguage } from "../i18n";
 import { Play, Pause, Share2, X, EllipsisVertical, Plus, Pencil } from "lucide-react-native";
 
 const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
@@ -33,6 +34,8 @@ export default function HistoryScreen({ navigation, route }: Props) {
   const c = isDark
     ? { bg: "#000000", card: "#0d0d0d", text: "#e8ecff", dim: "#8899bb", border: "#1a1a1a", accent: "#5b8cff" }
     : { bg: "#f8f9fa", card: "#ffffff", text: "#111827", dim: "#6b7280", border: "#e5e7eb", accent: "#2563eb" };
+  const { lang } = useAppLanguage();
+  const T = translations[lang];
 
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -234,7 +237,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
       <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 200, paddingTop: topPad }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Text style={[s.homeTitle, { color: c.text }]}>Your Recordings</Text>
+            <Text style={[s.homeTitle, { color: c.text }]}>{T.recordingsTitle}</Text>
             <TouchableOpacity onPress={() => navigation.navigate("Reader", {})} hitSlop={8} accessibilityRole="button" accessibilityLabel="New note">
               <Plus size={24} color={c.text} />
             </TouchableOpacity>
@@ -248,7 +251,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
         </View>
       </View>
       <FlatList data={recordings} keyExtractor={(r) => r.id} contentContainerStyle={[s.list, { paddingTop: topPad + 56 }]} removeClippedSubviews={false}
-        ListEmptyComponent={<View style={s.empty}><Text style={[s.emptyT, { color: c.text }]}>No recordings yet</Text><Text style={[s.emptyS, { color: c.dim }]}>Tap + to create your first note</Text></View>}
+        ListEmptyComponent={<View style={s.empty}><Text style={[s.emptyT, { color: c.text }]}>{T.noRecordings}</Text><Text style={[s.emptyS, { color: c.dim }]}>{T.createFirst}</Text></View>}
         renderItem={({ item }) => renderCard(item)} />
     </View>
   );
