@@ -130,6 +130,24 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
     }).catch(() => {});
   }, [noteId]);
 
+  // Auto-save the TITLE for an existing note (debounced) so the dashboard stays in sync,
+  // even if the user hasn't re-recorded yet. The note text only updates on a new recording.
+  useEffect(() => {
+    if (!editingId) return;
+    const timer = setTimeout(async () => {
+      try {
+        const hist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
+        const i = hist.findIndex((r: any) => r.id === editingId);
+        if (i >= 0) {
+          hist[i].title = title.trim() || "Untitled";
+          await safeWriteHistory(hist.slice(0, 50));
+          setHistoryCount(Math.min(hist.length, 50));
+        }
+      } catch {}
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [title, editingId]);
+
   const timeEstimate = useMemo(() => {
     const len = (text || "").trim().length;
     if (!len) return null;
@@ -192,7 +210,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
       setNoteUris(uris);
       setPos(0); setDur(0); setChunkIndex(0);
       setIsPlaying(true);
-      await playFrom(0, 0);
+      await playFrom(uris, 0, 0);
     } catch (e: any) {
       setIsGenerating(false);
       Alert.alert("Error", e.message || "Failed to generate audio.");
@@ -200,8 +218,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
   }
 
   // ---- Attached-audio playback (chunked, seekable) ----
-  async function playFrom(ci: number, at: number) {
-    const uris = noteUris;
+  async function playFrom(uris: string[], ci: number, at: number) {
     if (!uris.length || ci >= uris.length) return;
     await soundRef.current?.stopAsync().catch(() => {});
     await soundRef.current?.unloadAsync().catch(() => {});
@@ -239,7 +256,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
     }
     if (!noteUris.length) return;
     setIsPlaying(true);
-    await playFrom(chunkIndex, pos);
+    await playFrom(noteUris, chunkIndex, pos);
   }
 
   async function seekTo(ms: number) {
@@ -249,7 +266,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
       if (ms < cumulative[j]) { ci = j; off = j > 0 ? cumulative[j - 1] : 0; break; }
     }
     setPos(ms);
-    await playFrom(ci, ms - off);
+    await playFrom(noteUris, ci, ms - off);
   }
 
   function timeLabel(): string {
