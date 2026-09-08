@@ -14,7 +14,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import { textToSpeech, VOICES, type Voice } from "../lib/tts";
 import FloatingHamburger from "../components/FloatingHamburger";
-import { FileText, Mic } from "lucide-react-native";
+import { FileText, Mic, Home, Play, Pause } from "lucide-react-native";
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; isDark?: boolean; onToggleTheme?: () => void; };
 
@@ -68,7 +68,37 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
   const [savedToast, setSavedToast] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
 
+  // Attached-audio player (the "Recordings" playback engine, now inline in the editor)
+  const [noteUris, setNoteUris] = useState<string[]>([]);
+  const [pos, setPos] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [chunkIndex, setChunkIndex] = useState(0);
+  const [chunkDurs, setChunkDurs] = useState<number[]>([]);
   const soundRef = useRef<Audio.Sound | null>(null);
+  const nextSoundRef = useRef<Audio.Sound | null>(null);
+  const progW = useRef(0);
+  const totalDur = chunkDurs.reduce((s, d) => s + d, 0);
+  const cumulative = chunkDurs.reduce<number[]>((a, d, i) => { a.push((a[i - 1] || 0) + d); return a; }, []);
+
+  // Preload chunk durations so the seek bar + total time are available.
+  useEffect(() => {
+    if (!noteUris.length) return;
+    (async () => {
+      const d: number[] = [];
+      for (const u of noteUris) {
+        try {
+          const { sound: snd } = await Audio.Sound.createAsync({ uri: u }, { shouldPlay: false });
+          const st = await snd.getStatusAsync();
+          d.push(st.isLoaded ? (st.durationMillis || 0) : 0);
+          snd.unloadAsync().catch(() => {});
+        } catch { d.push(0); }
+      }
+      setChunkDurs(d);
+    })();
+  }, [noteUris]);
+
+  // Stop audio if the screen unmounts.
+  useEffect(() => () => { soundRef.current?.unloadAsync().catch(() => {}); nextSoundRef.current?.unloadAsync().catch(() => {}); }, []);
 
   useEffect(() => {
     ensureDir().then(() => {
@@ -99,56 +129,105 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
       const batchId = Date.now();
       const uris: string[] = [];
 
-      const firstB64 = await textToSpeech(chunks[0], selectedVoice.voice);
-      const firstFname = `reader-${batchId}-0.wav`;
-      const firstUri = AUDIO_DIR + firstFname;
-      await FileSystem.writeAsStringAsync(firstUri, firstB64, { encoding: FileSystem.EncodingType.Base64 });
-      uris.push(firstUri);
-
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
-      const { sound } = await Audio.Sound.createAsync({ uri: firstUri }, { shouldPlay: true }, (status) => {
-        if (status.isLoaded && status.didJustFinish) { setIsPlaying(false); sound.unloadAsync().catch(() => {}); }
-      });
-      soundRef.current = sound;
-      setIsPlaying(true);
-      setIsGenerating(false);
-
-      const entryId = `${batchId}-0`;
-      const hist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
-      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: firstUri, uris: [firstUri], processing: chunks.length > 1, createdAt: Date.now() });
-      await safeWriteHistory(hist.slice(0, 50));
-      setHistoryCount(Math.min(hist.length, 50));
-      setSavedToast(true);
-      setTimeout(() => setSavedToast(false), 3000);
-
-      for (let i = 1; i < chunks.length; i++) {
+      const entryId = `${batchId}`;
+      // Generate ALL chunks first (audio attaches to this note in the editor, no separate screen).
+      for (let i = 0; i < chunks.length; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, 2000));
         try {
-          await new Promise(r => setTimeout(r, 2000));
           const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
-          const fname = `reader-${batchId}-${i}.wav`;
-          const uri = AUDIO_DIR + fname;
+          const uri = AUDIO_DIR + `reader-${batchId}-${i}.wav`;
           await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
           uris.push(uri);
-        } catch (e: any) {
+        } catch {
           try {
             await new Promise(r => setTimeout(r, 5000));
             const b64 = await textToSpeech(chunks[i], selectedVoice.voice);
-            const fname = `reader-${batchId}-${i}.wav`;
-            const uri = AUDIO_DIR + fname;
+            const uri = AUDIO_DIR + `reader-${batchId}-${i}.wav`;
             await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
             uris.push(uri);
           } catch {}
         }
       }
 
-      const updatedHist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
-      const idx = updatedHist.findIndex((r: {id: string}) => r.id === entryId);
-      if (idx >= 0) { updatedHist[idx].uris = uris; updatedHist[idx].processing = false; }
-      await safeWriteHistory(updatedHist);
+      // Save the note + its audio as one package.
+      const hist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
+      hist.unshift({ id: entryId, title: title.trim() || content.slice(0, 50), text: content, voice: selectedVoice.label, uri: uris[0], uris, processing: false, createdAt: Date.now() });
+      await safeWriteHistory(hist.slice(0, 50));
+      setHistoryCount(Math.min(hist.length, 50));
+      setIsGenerating(false);
+      setSavedToast(true);
+      setTimeout(() => setSavedToast(false), 3000);
+
+      // Attach the audio to the editor's reader bar and start playing.
+      setNoteUris(uris);
+      setPos(0); setDur(0); setChunkIndex(0);
+      setIsPlaying(true);
+      await playFrom(0, 0);
     } catch (e: any) {
       setIsGenerating(false);
       Alert.alert("Error", e.message || "Failed to generate audio.");
     }
+  }
+
+  // ---- Attached-audio playback (chunked, seekable) ----
+  async function playFrom(ci: number, at: number) {
+    const uris = noteUris;
+    if (!uris.length || ci >= uris.length) return;
+    await soundRef.current?.stopAsync().catch(() => {});
+    await soundRef.current?.unloadAsync().catch(() => {});
+    await nextSoundRef.current?.unloadAsync().catch(() => {});
+    const playChunk = (idx: number, startAt: number) => {
+      if (idx >= uris.length) { setIsPlaying(false); setChunkIndex(0); setPos(0); return; }
+      setChunkIndex(idx);
+      if (idx + 1 < uris.length) {
+        nextSoundRef.current?.unloadAsync().catch(() => {});
+        Audio.Sound.createAsync({ uri: uris[idx + 1] }, { shouldPlay: false }).then(({ sound: nx }) => { nextSoundRef.current = nx; }).catch(() => {});
+      }
+      Audio.Sound.createAsync({ uri: uris[idx] }, { shouldPlay: true, positionMillis: startAt }, (st: any) => {
+        if (st.isLoaded) {
+          setPos(st.positionMillis); setDur(st.durationMillis || 0);
+          if (st.didJustFinish) {
+            soundRef.current?.unloadAsync().catch(() => {});
+            if (nextSoundRef.current) { soundRef.current = nextSoundRef.current; nextSoundRef.current = null; soundRef.current!.playAsync(); playChunk(idx + 1, 0); }
+            else playChunk(idx + 1, 0);
+          }
+        }
+      }).then(({ sound }) => { soundRef.current = sound; }).catch(() => {});
+    };
+    setIsPlaying(true);
+    playChunk(ci, at);
+  }
+
+  async function toggleAttached() {
+    if (isPlaying) {
+      await soundRef.current?.stopAsync().catch(() => {});
+      await soundRef.current?.unloadAsync().catch(() => {});
+      await nextSoundRef.current?.unloadAsync().catch(() => {});
+      soundRef.current = null; nextSoundRef.current = null;
+      setIsPlaying(false); setPos(0); setChunkIndex(0);
+      return;
+    }
+    if (!noteUris.length) return;
+    setIsPlaying(true);
+    await playFrom(chunkIndex, pos);
+  }
+
+  async function seekTo(ms: number) {
+    if (!totalDur || !noteUris.length) return;
+    let ci = 0, off = 0;
+    for (let j = 0; j < cumulative.length; j++) {
+      if (ms < cumulative[j]) { ci = j; off = j > 0 ? cumulative[j - 1] : 0; break; }
+    }
+    setPos(ms);
+    await playFrom(ci, ms - off);
+  }
+
+  function timeLabel(): string {
+    if (!dur && !totalDur) return "0:00";
+    const cur = (chunkIndex > 0 ? cumulative[chunkIndex - 1] || 0 : 0) + pos;
+    const total = totalDur || dur;
+    const f = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
+    return `${f(cur)} / ${f(total)}`;
   }
 
   async function stopPlayback() {
@@ -199,23 +278,19 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
         ]}
       />
 
-      {/* Top bar: make saved recordings discoverable (not just in the hamburger) */}
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 4, paddingBottom: 6 }}>
+      {/* Top nav: home (dashboard) on the left, hamburger on the right */}
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingTop: 6, paddingBottom: 2 }}>
         <TouchableOpacity
           onPress={() => navigation.navigate("History", { isDark })}
-          style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+          style={{ padding: 8 }}
           accessibilityRole="button"
+          accessibilityLabel="Dashboard"
         >
-          <Text style={{ color: theme.colors.primary, fontWeight: "700", fontSize: 15 }}>Recordings</Text>
-          {historyCount > 0 && (
-            <View style={{ backgroundColor: theme.colors.primary, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 1 }}>
-              <Text style={{ color: theme.colors.onPrimary, fontSize: 12, fontWeight: "700" }}>{historyCount}</Text>
-            </View>
-          )}
+          <Home size={22} color={theme.colors.onSurface} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingTop: 8, paddingBottom: 8 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" decelerationRate={0.998}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingTop: 4, paddingBottom: 8 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" decelerationRate={0.998}>
         <PaperInput mode="flat" style={{ fontSize: 20, fontWeight: "600", backgroundColor: "transparent", marginBottom: 8 }}
           placeholder="Document title" value={title} onChangeText={setTitle}
           underlineColor={theme.colors.outline} activeUnderlineColor={theme.colors.primary}
@@ -239,6 +314,39 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
             <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Saved to Recordings</Text>
           </View>
         )}
+        {noteUris.length > 0 && (
+          <View style={{ borderTopWidth: 1, borderTopColor: theme.colors.outline, paddingHorizontal: 12, paddingVertical: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <TouchableOpacity onPress={toggleAttached}
+                style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: theme.colors.outline, backgroundColor: theme.colors.surface }}>
+                {isPlaying ? <Pause size={18} color={theme.colors.onSurface} /> : <Play size={18} color={theme.colors.primary} />}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, height: 26, justifyContent: "center" }}
+                activeOpacity={0.8}
+                onLayout={(e) => { progW.current = e.nativeEvent.layout.width; }}
+                onPress={(e) => { if (!progW.current || !totalDur) return; const r = Math.max(0, Math.min(1, e.nativeEvent.locationX / progW.current)); seekTo(r * totalDur); }}
+              >
+                <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.outline, overflow: "hidden" }}>
+                  <View style={{ height: "100%", width: `${(totalDur > 0 ? Math.min(1, ((chunkIndex > 0 ? cumulative[chunkIndex - 1] || 0 : 0) + pos) / totalDur) : 0) * 100}%`, backgroundColor: theme.colors.primary }} />
+                </View>
+              </TouchableOpacity>
+              <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12, minWidth: 64, textAlign: "right" }}>{timeLabel()}</Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8, justifyContent: "center", marginTop: 6 }}>
+              {[["-15s", -15000], ["Restart", null], ["+15s", 15000]].map(([label, delta]) => (
+                <TouchableOpacity key={label as string} onPress={() => {
+                  const cur = (chunkIndex > 0 ? cumulative[chunkIndex - 1] || 0 : 0) + pos;
+                  if (delta == null) { setPos(0); soundRef.current?.setPositionAsync(0).catch(() => {}); }
+                  else seekTo(Math.max(0, Math.min(totalDur, cur + (delta as number))));
+                }} style={{ paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.outline }}>
+                  <Text style={{ color: theme.colors.onSurface, fontSize: 12 }}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
         <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8 }}>
           <Button mode="text" onPress={handleImport} loading={isImporting} icon={() => <FileText size={16} color={theme.colors.onSurface} />}
             textColor={theme.colors.onSurface}>Import</Button>

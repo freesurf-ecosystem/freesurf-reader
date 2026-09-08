@@ -45,6 +45,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [expandedTextId, setExpandedTextId] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const progW = useRef(0);
 
@@ -174,6 +175,17 @@ export default function HistoryScreen({ navigation, route }: Props) {
           </TouchableOpacity>
         </View>
 
+        {item.text ? (
+          <TouchableOpacity activeOpacity={0.8} onPress={() => setExpandedTextId(expandedTextId === item.id ? null : item.id)}>
+            <Text style={[s.noteText, { color: c.text }]} numberOfLines={expandedTextId === item.id ? undefined : 3}>
+              {item.text}
+            </Text>
+            {expandedTextId !== item.id && (
+              <Text style={[s.noteMore, { color: c.accent }]}>Tap to see full note</Text>
+            )}
+          </TouchableOpacity>
+        ) : null}
+
         {isMenuOpen && (
           <View>
             <View style={s.progRow}>
@@ -241,6 +253,8 @@ const s = StyleSheet.create({
   meta: { fontSize: 12 },
   processing: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 },
   processingT: { fontSize: 11 },
+  noteText: { fontSize: 13, lineHeight: 19, marginTop: 10 },
+  noteMore: { fontSize: 12, marginTop: 4, textDecorationLine: "underline" },
   input: { fontSize: 14, fontWeight: "600", borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   menuBtn: { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   progRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 10 },
