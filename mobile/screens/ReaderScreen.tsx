@@ -11,6 +11,7 @@ import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import * as DocumentPicker from "expo-document-picker";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../App";
 import { textToSpeech, VOICES, type Voice } from "../lib/tts";
 import FloatingHamburger from "../components/FloatingHamburger";
@@ -57,6 +58,7 @@ async function ensureDir() {
 
 export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Props) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [selectedVoice, setSelectedVoice] = useState<Voice>(VOICES[0]);
@@ -265,29 +267,33 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <FloatingHamburger
-        topOffset={48}
-        colors={hbColors}
-        footer={themeToggleFooter}
-        menuItems={[
-          { label: "Recordings", onPress: () => navigation.navigate("History", { isDark }) },
-          { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
-          { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
-          { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
-          { label: "About Us", onPress: () => Alert.alert("About FreeSurf Reader", "FreeSurf Reader transforms text into natural-sounding speech. Just paste or import a document and choose from 23 languages.\n\nMore free apps are on the way — stay tuned for calorie tracking, transcription, and more.") },
-        ]}
-      />
-
-      {/* Top nav: home (dashboard) on the left, hamburger on the right */}
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingTop: 6, paddingBottom: 2 }}>
-        <TouchableOpacity
-          onPress={() => navigation.navigate("History", { isDark })}
-          style={{ padding: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel="Dashboard"
-        >
-          <Home size={22} color={theme.colors.onSurface} />
-        </TouchableOpacity>
+      {/* Unified nav bar: safe-area top, home (dashboard) left, hamburger right */}
+      <View style={{ backgroundColor: theme.colors.background }}>
+        <View style={{ paddingTop: insets.top }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", height: 48, paddingHorizontal: 6, borderBottomWidth: 0.5, borderBottomColor: theme.colors.outline }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("History", { isDark })}
+              style={{ padding: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Dashboard"
+            >
+              <Home size={22} color={theme.colors.onSurface} />
+            </TouchableOpacity>
+            <FloatingHamburger
+              inline
+              topOffset={insets.top + 48}
+              colors={hbColors}
+              footer={themeToggleFooter}
+              menuItems={[
+                { label: "Dashboard", onPress: () => navigation.navigate("History", { isDark }) },
+                { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
+                { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
+                { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
+                { label: "About Us", onPress: () => Alert.alert("About FreeSurf Reader", "FreeSurf Reader transforms text into natural-sounding speech. Just paste or import a document and choose from 23 languages.\n\nMore free apps are on the way — stay tuned for calorie tracking, transcription, and more.") },
+              ]}
+            />
+          </View>
+        </View>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingTop: 4, paddingBottom: 8 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" decelerationRate={0.998}>
