@@ -5,6 +5,7 @@
  */
 
 import { TTS_WORKER_URL } from "./config";
+import { getDeviceId } from "./device";
 
 export interface Voice {
   id: string;
@@ -46,9 +47,10 @@ export async function textToSpeech(
   voice = "af_heart",
   speed = 1.0
 ): Promise<string> {
+  const deviceId = await getDeviceId();
   const res = await fetch(`${TTS_WORKER_URL}/api/tts`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Device-Id": deviceId },
     body: JSON.stringify({ text, voice, language: voice, speed }),
   });
 

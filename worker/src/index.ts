@@ -15,17 +15,15 @@ export interface Env {
   SUPABASE_ANON_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
   USAGE_METERING?: string;
-  READER_WEEKLY_CHARS?: string;
+  READER_MONTHLY_CHARS?: string;
 }
 
 const READER_METRIC = "reader_chars";
-const DEFAULT_WEEKLY_CHARS = 30000;
+const DEFAULT_MONTHLY_CHARS = 300000;
 
-// Monday (UTC) of the current week, as yyyy-mm-dd — weekly allowance bucket.
-function weekStartIso(now: Date): string {
-  const day = (now.getUTCDay() + 6) % 7; // 0 = Monday
-  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - day));
-  return monday.toISOString().slice(0, 10);
+// First of the current UTC month, as yyyy-mm-dd — monthly allowance bucket.
+function monthStartIso(now: Date): string {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
 }
 
 function srHeaders(env: Env): Record<string, string> {
@@ -35,7 +33,6 @@ function srHeaders(env: Env): Record<string, string> {
   };
 }
 
-// Resolve the signed-in user id from the Authorization Bearer token (Supabase auth).
 async function authedUserId(env: Env, authHeader: string): Promise<string | null> {
   if (!authHeader.startsWith("Bearer ") || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return null;
   try {
@@ -50,10 +47,18 @@ async function authedUserId(env: Env, authHeader: string): Promise<string | null
   }
 }
 
-async function readUsage(env: Env, userId: string, metric: string, week: string): Promise<number> {
+// Anonymous-first: signed-in account OR the client's device id (X-Device-Id).
+async function resolveUserId(env: Env, request: Request): Promise<string | null> {
+  const authed = await authedUserId(env, request.headers.get("Authorization") || "");
+  if (authed) return authed;
+  const deviceId = request.headers.get("X-Device-Id")?.trim();
+  return deviceId ? `anon:${deviceId}` : null;
+}
+
+async function readUsage(env: Env, userId: string, metric: string, period: string): Promise<number> {
   try {
     const q = new URLSearchParams({
-      user_id: `eq.${userId}`, metric: `eq.${metric}`, week_start: `eq.${week}`, select: "count",
+      user_id: `eq.${userId}`, metric: `eq.${metric}`, period_start: `eq.${period}`, select: "count",
     });
     const res = await fetch(`${env.SUPABASE_URL}/rest/v1/usage?${q.toString()}`, { headers: srHeaders(env) });
     if (!res.ok) return 0;
@@ -64,11 +69,11 @@ async function readUsage(env: Env, userId: string, metric: string, week: string)
   }
 }
 
-async function incrementUsage(env: Env, userId: string, metric: string, week: string, delta: number): Promise<number> {
+async function incrementUsage(env: Env, userId: string, metric: string, period: string, delta: number): Promise<number> {
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/meter_usage`, {
     method: "POST",
     headers: { ...srHeaders(env), "Content-Type": "application/json" },
-    body: JSON.stringify({ p_user_id: userId, p_metric: metric, p_week: week, p_delta: delta }),
+    body: JSON.stringify({ p_user_id: userId, p_metric: metric, p_period: period, p_delta: delta }),
   });
   if (!res.ok) return 0;
   const n = Number(await res.text());
@@ -81,17 +86,17 @@ async function gateTtsUsage(env: Env, request: Request, delta: number): Promise<
   ok: boolean; userId?: string; usage?: { metric: string; used: number; limit: number; reset: string };
 }> {
   if (env.USAGE_METERING !== "on" || !env.SUPABASE_SECRET_KEY || !env.SUPABASE_URL) return { ok: true };
-  const userId = await authedUserId(env, request.headers.get("Authorization") || "");
+  const userId = await resolveUserId(env, request);
   if (!userId) return { ok: false, userId: undefined, usage: undefined }; // caller returns 401
-  const week = weekStartIso(new Date());
-  const limit = Math.max(0, Number(env.READER_WEEKLY_CHARS) || DEFAULT_WEEKLY_CHARS);
-  const used = await readUsage(env, userId, READER_METRIC, week);
+  const period = monthStartIso(new Date());
+  const limit = Math.max(0, Number(env.READER_MONTHLY_CHARS) || DEFAULT_MONTHLY_CHARS);
+  const used = await readUsage(env, userId, READER_METRIC, period);
   if (used + delta > limit) {
-    return { ok: false, userId, usage: { metric: READER_METRIC, used, limit, reset: week } };
+    return { ok: false, userId, usage: { metric: READER_METRIC, used, limit, reset: period } };
   }
-  await incrementUsage(env, userId, READER_METRIC, week, delta);
+  await incrementUsage(env, userId, READER_METRIC, period, delta);
   const newUsed = used + delta;
-  return { ok: true, userId, usage: { metric: READER_METRIC, used: newUsed, limit, reset: week } };
+  return { ok: true, userId, usage: { metric: READER_METRIC, used: newUsed, limit, reset: period } };
 }
 
 // Kokoro language→voice defaults (used when the client sends a language code).
@@ -175,18 +180,18 @@ export default {
       return new Response(null, { status: 204, headers });
     }
 
-    // ── Usage meter (GET /api/usage) — how much of the weekly allowance is left ──
+    // ── Usage meter (GET /api/usage) — how much of the monthly allowance is left ──
     if (request.method === "GET" && url.pathname === "/api/usage") {
       if (env.USAGE_METERING !== "on" || !env.SUPABASE_SECRET_KEY || !env.SUPABASE_URL) {
         return jsonResponse({ error: "Usage metering not configured" }, 500, headers);
       }
-      const userId = await authedUserId(env, request.headers.get("Authorization") || "");
-      if (!userId) return jsonResponse({ error: "Unauthorized" }, 401, headers);
-      const week = weekStartIso(new Date());
-      const limit = Math.max(0, Number(env.READER_WEEKLY_CHARS) || DEFAULT_WEEKLY_CHARS);
-      const used = await readUsage(env, userId, READER_METRIC, week);
+      const userId = await resolveUserId(env, request);
+      if (!userId) return jsonResponse({ error: "Missing device id" }, 401, headers);
+      const period = monthStartIso(new Date());
+      const limit = Math.max(0, Number(env.READER_MONTHLY_CHARS) || DEFAULT_MONTHLY_CHARS);
+      const used = await readUsage(env, userId, READER_METRIC, period);
       return jsonResponse(
-        { usage: { metric: READER_METRIC, used, limit, reset: week } },
+        { usage: { metric: READER_METRIC, used, limit, reset: period } },
         200,
         headers
       );
@@ -290,17 +295,17 @@ export default {
           return jsonResponse({ error: "No text provided" }, 400, headers);
         }
 
-        // Weekly free allowance gate (only active when Supabase metering is configured).
+        // Monthly free allowance gate (only active when Supabase metering is configured).
         const gate = await gateTtsUsage(env, request, body.text.length);
         if (!gate.ok) {
           if (gate.usage) {
             return jsonResponse(
-              { error: "Weekly limit reached — upgrade or try again next week.", usage: gate.usage },
+              { error: "Monthly limit reached — try again next month.", usage: gate.usage },
               429,
               headers
             );
           }
-          return jsonResponse({ error: "Please sign in to use the reader." }, 401, headers);
+          return jsonResponse({ error: "Missing device id" }, 401, headers);
         }
 
         // Hosted Together Kokoro path. Falls back to the pod when no key is set.

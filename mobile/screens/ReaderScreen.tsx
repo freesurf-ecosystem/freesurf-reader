@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../App";
 import { textToSpeech, VOICES, type Voice } from "../lib/tts";
 import FloatingHamburger from "../components/FloatingHamburger";
+import UsageMeter from "../components/UsageMeter";
 import { translations, useAppLanguage } from "../i18n";
 import { FileText, Mic, Home, Play, Pause } from "lucide-react-native";
 
@@ -300,18 +301,21 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
     setIsImporting(false);
   }
 
-  const themeToggleFooter = onToggleTheme ? (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-      <Switch value={!isDark} onValueChange={onToggleTheme} trackColor={{ true: isDark ? "#ffffff" : "#111827", false: "#555" }} />
-    </View>
-  ) : undefined;
-
   const hbColors = {
     text: theme.colors.onSurface,
     dim: theme.colors.onSurfaceVariant,
     card: theme.colors.surface,
     border: theme.colors.outline,
   };
+
+  const themeToggleFooter = onToggleTheme ? (
+    <View style={{ flexDirection: "column", gap: 10 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+        <Switch value={!isDark} onValueChange={onToggleTheme} trackColor={{ true: isDark ? "#ffffff" : "#111827", false: "#555" }} />
+      </View>
+      <UsageMeter colors={hbColors} />
+    </View>
+  ) : undefined;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
