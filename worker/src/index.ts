@@ -1,5 +1,5 @@
 /**
- * Free Surf Natural Reader — Cloudflare Worker
+ * FreeSurf Natural Reader — Cloudflare Worker
  * Proxies TTS requests to RunPod Kokoro. Keeps API keys server-side.
  * Also provides PDF text extraction.
  */
@@ -9,7 +9,7 @@ export interface Env {
   OPENROUTER_API_KEY?: string;
   TOGETHER_API_KEY?: string;
   TOGETHER_TTS_VOICE?: string;
-  // Usage metering (shared Free Surf Supabase). When these are set, TTS is gated by the
+  // Usage metering (shared FreeSurf Supabase). When these are set, TTS is gated by the
   // weekly free allowance. Without them, the app runs unmetered (existing behavior).
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;

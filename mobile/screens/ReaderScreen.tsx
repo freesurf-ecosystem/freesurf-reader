@@ -195,7 +195,7 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
           { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
           { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
           { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
-          { label: "About Us", onPress: () => Alert.alert("About Free Surf Reader", "Free Surf Reader transforms text into natural-sounding speech. Just paste or import a document and choose from 23 languages.\n\nMore free apps are on the way — stay tuned for calorie tracking, transcription, and more.") },
+          { label: "About Us", onPress: () => Alert.alert("About FreeSurf Reader", "FreeSurf Reader transforms text into natural-sounding speech. Just paste or import a document and choose from 23 languages.\n\nMore free apps are on the way — stay tuned for calorie tracking, transcription, and more.") },
         ]}
       />
 
