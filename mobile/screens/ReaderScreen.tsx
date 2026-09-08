@@ -163,7 +163,7 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
       if (r.canceled || !r.assets?.[0]) { setIsImporting(false); return; }
       const f = r.assets[0];
       setTitle(f.name || "");
-      const content = await FileSystem.readAsStringAsync(f.uri, { encoding: FileSystem.EncodingType.Utf8 });
+      const content = await FileSystem.readAsStringAsync(f.uri, { encoding: FileSystem.EncodingType.UTF8 });
       setText(content);
     } catch (e: any) {
       if (!String(e).includes("canceled")) Alert.alert("Import failed", e.message);
@@ -199,7 +199,23 @@ export default function ReaderScreen({ navigation, isDark, onToggleTheme }: Prop
         ]}
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingTop: 48, paddingBottom: 8 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" decelerationRate={0.998}>
+      {/* Top bar: make saved recordings discoverable (not just in the hamburger) */}
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 4, paddingBottom: 6 }}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("History", { isDark })}
+          style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+          accessibilityRole="button"
+        >
+          <Text style={{ color: theme.colors.primary, fontWeight: "700", fontSize: 15 }}>Recordings</Text>
+          {historyCount > 0 && (
+            <View style={{ backgroundColor: theme.colors.primary, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 1 }}>
+              <Text style={{ color: theme.colors.onPrimary, fontSize: 12, fontWeight: "700" }}>{historyCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingTop: 8, paddingBottom: 8 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" decelerationRate={0.998}>
         <PaperInput mode="flat" style={{ fontSize: 20, fontWeight: "600", backgroundColor: "transparent", marginBottom: 8 }}
           placeholder="Document title" value={title} onChangeText={setTitle}
           underlineColor={theme.colors.outline} activeUnderlineColor={theme.colors.primary}

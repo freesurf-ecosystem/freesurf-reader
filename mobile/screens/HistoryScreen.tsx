@@ -52,7 +52,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
 
   async function loadHistory() {
     try {
-      const raw = await FileSystem.readAsStringAsync(HISTORY_PATH, { encoding: FileSystem.EncodingType.Utf8 }).catch(() => "[]");
+      const raw = await FileSystem.readAsStringAsync(HISTORY_PATH, { encoding: FileSystem.EncodingType.UTF8 }).catch(() => "[]");
       try { const r = JSON.parse(raw); setRecordings(r); } catch { setRecordings([]); }
     } catch { setRecordings([]); }
   }
