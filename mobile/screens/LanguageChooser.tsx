@@ -7,6 +7,12 @@ type Props = { onSelect: (code: string) => void };
 const NAMES: Record<string, string> = {
   en: "English",
   es: "Español",
+  fr: "Français",
+  hi: "हिन्दी",
+  it: "Italiano",
+  ja: "日本語",
+  pt: "Português",
+  zh: "中文",
 };
 
 /** Shown on first launch: pick your app language. Only lists languages we actually translate. */
