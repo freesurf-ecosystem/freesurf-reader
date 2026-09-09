@@ -7,3 +7,7 @@ export const URLS = {
   terms: `https://${ROOT_DOMAIN}/terms`,
 };
 export const TTS_WORKER_URL = `https://reader.${ROOT_DOMAIN}`;
+
+// RevenueCat Google Play public SDK key for THIS app (Reader). Replace the placeholder
+// with the key from RevenueCat's Reader (Google Play) app entry before shipping.
+export const REVENUECAT_ANDROID_KEY = "GOOG_READER_PUBLIC_SDK_KEY_HERE";

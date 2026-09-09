@@ -28,6 +28,8 @@ export const translations: Record<Lang, Strings> = {
     featureUnlimited: "Unlimited read-aloud minutes",
     featureNoAds: "No ads",
     subscribeCta: "Subscribe", restoreCta: "Restore Purchase",
+    activatedMsg: "Subscription activated. Enjoy Pro!",
+    restoredMsg: "Your purchases have been restored.",
     cancelAnytime: "Cancel anytime in Google Play or the App Store.",
     proNote: "Subscriptions keep the free tier free for everyone.",
     untitled: "Untitled",

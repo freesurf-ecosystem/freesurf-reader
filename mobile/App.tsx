@@ -8,6 +8,8 @@ import { requestTrackingPermissionsAsync, getTrackingPermissionsAsync } from "ex
 import ReaderScreen from "./screens/ReaderScreen";
 import HistoryScreen from "./screens/HistoryScreen";
 import SubscriptionScreen from "./screens/SubscriptionScreen";
+import { REVENUECAT_ANDROID_KEY } from "./lib/config";
+import Purchases from "react-native-purchases";
 import LanguageChooser from "./screens/LanguageChooser";
 import { useAppLanguage } from "./i18n";
 
@@ -82,6 +84,16 @@ export default function App() {
     if (AppState.currentState === "active") requestATT();
 
     return () => subscription.remove();
+  }, []);
+
+  // Configure RevenueCat (Google Play) once at launch when a real SDK key is present.
+  useEffect(() => {
+    if (Platform.OS !== "android" || REVENUECAT_ANDROID_KEY.includes("HERE")) return;
+    try {
+      Purchases.configure({ apiKey: REVENUECAT_ANDROID_KEY });
+    } catch (e: any) {
+      console.log("[Purchases] configure error:", e?.message || e);
+    }
   }, []);
 
   if (!langLoaded) {
