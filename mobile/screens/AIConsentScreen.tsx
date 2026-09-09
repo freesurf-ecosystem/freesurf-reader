@@ -7,7 +7,7 @@ type Props = { onAgree: () => void };
 
 const TERMS_URL = "https://freesurf.tools/terms";
 const PRIVACY_URL = "https://freesurf.tools/privacy";
-const AI_URL = "https://freesurf.tools/privacy"; // dedicated AI & data processing doc link
+const AI_URL = PRIVACY_URL; // AI data processing is documented in the Privacy Policy
 
 const AI_COPY =
   "Reader uses AI to read text aloud. When you tap Read Aloud, we send the text you choose to the Together AI serverless network, where open-source models generate speech and return audio to you.";
