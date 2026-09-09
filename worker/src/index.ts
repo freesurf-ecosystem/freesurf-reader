@@ -16,9 +16,14 @@ export interface Env {
   SUPABASE_SECRET_KEY?: string;
   USAGE_METERING?: string;
   READER_MONTHLY_CHARS?: string;
+  // RevenueCat secret API key (Cloudflare secret). When set, the worker verifies the
+  // user's Pro entitlement server-side by device id (the app configures RevenueCat with
+  // appUserID = device id) and lets Pro bypass the monthly allowance.
+  REVENUECAT_SECRET_KEY?: string;
 }
 
 const READER_METRIC = "reader_chars";
+const READER_ENTITLEMENT = "pro_reader";
 const DEFAULT_MONTHLY_CHARS = 300000;
 
 // First of the current UTC month, as yyyy-mm-dd — monthly allowance bucket.
@@ -69,6 +74,28 @@ async function readUsage(env: Env, userId: string, metric: string, period: strin
   }
 }
 
+// Server-side RevenueCat entitlement check by app_user_id (= device id). Returns true when
+// the app's entitlement (READER_ENTITLEMENT) is active and not expired.
+async function rcIsPro(env: Env, appUserId: string): Promise<boolean> {
+  if (!env.REVENUECAT_SECRET_KEY) return false;
+  try {
+    const res = await fetch(
+      `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(appUserId)}`,
+      { headers: { Authorization: `Bearer ${env.REVENUECAT_SECRET_KEY}`, Accept: "application/json" } }
+    );
+    if (!res.ok) return false;
+    const data = (await res.json()) as {
+      subscriber?: { entitlements?: Record<string, { expires_date?: string | null }> };
+    };
+    const ent = data.subscriber?.entitlements?.[READER_ENTITLEMENT];
+    if (!ent) return false;
+    if (!ent.expires_date) return true;
+    return new Date(ent.expires_date).getTime() > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 async function incrementUsage(env: Env, userId: string, metric: string, period: string, delta: number): Promise<number> {
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/meter_usage`, {
     method: "POST",
@@ -80,14 +107,17 @@ async function incrementUsage(env: Env, userId: string, metric: string, period: 
   return Number.isFinite(n) ? n : 0;
 }
 
-// Metered only when Supabase is configured. Returns { ok, userId?, usage? } — when not
-// configured this allows everything (keeps prod working until secrets are set).
+// Metered only when Supabase is configured. Returns { ok, userId?, isPro?, usage? } — when
+// not configured this allows everything (keeps prod working until secrets are set).
 async function gateTtsUsage(env: Env, request: Request, delta: number): Promise<{
-  ok: boolean; userId?: string; usage?: { metric: string; used: number; limit: number; reset: string };
+  ok: boolean; userId?: string; isPro?: boolean;
+  usage?: { metric: string; used: number; limit: number; reset: string };
 }> {
   if (env.USAGE_METERING !== "on" || !env.SUPABASE_SECRET_KEY || !env.SUPABASE_URL) return { ok: true };
   const userId = await resolveUserId(env, request);
   if (!userId) return { ok: false, userId: undefined, usage: undefined }; // caller returns 401
+  const deviceId = request.headers.get("X-Device-Id")?.trim() || "";
+  if (deviceId && await rcIsPro(env, deviceId)) return { ok: true, userId, isPro: true };
   const period = monthStartIso(new Date());
   const limit = Math.max(0, Number(env.READER_MONTHLY_CHARS) || DEFAULT_MONTHLY_CHARS);
   const used = await readUsage(env, userId, READER_METRIC, period);
@@ -187,11 +217,13 @@ export default {
       }
       const userId = await resolveUserId(env, request);
       if (!userId) return jsonResponse({ error: "Missing device id" }, 401, headers);
+      const deviceId = request.headers.get("X-Device-Id")?.trim() || "";
+      const isPro = deviceId ? await rcIsPro(env, deviceId) : false;
       const period = monthStartIso(new Date());
       const limit = Math.max(0, Number(env.READER_MONTHLY_CHARS) || DEFAULT_MONTHLY_CHARS);
       const used = await readUsage(env, userId, READER_METRIC, period);
       return jsonResponse(
-        { usage: { metric: READER_METRIC, used, limit, reset: period } },
+        { isPro, usage: { metric: READER_METRIC, used, limit, reset: period } },
         200,
         headers
       );
