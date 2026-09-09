@@ -2,10 +2,9 @@ import React, { useState, useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { AppState, Platform } from "react-native";
+import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
-import { requestTrackingPermissionsAsync, getTrackingPermissionsAsync } from "expo-tracking-transparency";
 import ReaderScreen from "./screens/ReaderScreen";
 import HistoryScreen from "./screens/HistoryScreen";
 import SubscriptionScreen from "./screens/SubscriptionScreen";
@@ -75,31 +74,6 @@ export default function App() {
     setAiConsent(true);
     AsyncStorage.setItem(AI_CONSENT_KEY, "true").catch(() => {});
   };
-
-  useEffect(() => {
-    if (Platform.OS !== "ios") return;
-
-    let requested = false;
-    const requestATT = async () => {
-      if (requested) return;
-      requested = true;
-      try {
-        const { status } = await getTrackingPermissionsAsync();
-        if (status === "undetermined") {
-          await requestTrackingPermissionsAsync();
-        }
-      } catch (e: any) {
-        console.log("[ATT] error:", e?.message || e);
-      }
-    };
-
-    const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") requestATT();
-    });
-    if (AppState.currentState === "active") requestATT();
-
-    return () => subscription.remove();
-  }, []);
 
   // Configure RevenueCat (Google Play) once at launch when a real SDK key is present.
   // appUserID = device id so the worker can verify the entitlement server-side.

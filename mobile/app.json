@@ -2,7 +2,7 @@
   "expo": {
     "name": "Reader",
     "slug": "freesurf-natural-reader",
-    "version": "0.1.12",
+    "version": "0.1.13",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,12 +15,11 @@
     ],
     "android": {
       "package": "tools.freesurf.reader",
-      "versionCode": 13
+      "versionCode": 14
     },
     "ios": {
       "bundleIdentifier": "tools.freesurf.reader",
       "infoPlist": {
-        "NSUserTrackingUsageDescription": "Your device identifier is used to serve personalized ads and keep FreeSurf free.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "privacyManifests": {
@@ -46,7 +45,6 @@
       }
     },
     "plugins": [
-      "expo-tracking-transparency",
       [
         "expo-build-properties",
         {
