@@ -126,7 +126,10 @@ export default function App() {
       </PaperProvider>
     );
   }
-  if (aiConsent === false) {
+  if (aiConsent !== true) {
+    if (aiConsent === null) {
+      return <PaperProvider theme={isDark ? darkTheme : lightTheme}><StatusBar style="light" /></PaperProvider>;
+    }
     return (
       <PaperProvider theme={isDark ? darkTheme : lightTheme}>
         <StatusBar style="light" />
