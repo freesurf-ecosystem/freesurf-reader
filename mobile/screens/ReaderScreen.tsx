@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   View, ScrollView, ActivityIndicator, Alert, Modal,
-  KeyboardAvoidingView, Platform, Linking, Switch, TouchableOpacity,
+  KeyboardAvoidingView, Platform, Linking, TouchableOpacity,
 } from "react-native";
 import {
   Text, Button, Surface,
@@ -309,10 +309,10 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
   };
 
   const themeToggleFooter = onToggleTheme ? (
-    <View style={{ flexDirection: "column", gap: 10 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-        <Switch value={!isDark} onValueChange={onToggleTheme} trackColor={{ true: isDark ? "#ffffff" : "#111827", false: "#555" }} />
-      </View>
+    <View style={{ flexDirection: "column", gap: 10, alignItems: "center" }}>
+      <TouchableOpacity onPress={onToggleTheme} accessibilityLabel="Toggle theme" hitSlop={8} style={{ padding: 4 }}>
+        <Text style={{ fontSize: 26, color: hbColors.text }}>◐</Text>
+      </TouchableOpacity>
       <UsageMeter colors={hbColors} />
     </View>
   ) : undefined;
