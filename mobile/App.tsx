@@ -3,16 +3,20 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { AppState, Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
 import { requestTrackingPermissionsAsync, getTrackingPermissionsAsync } from "expo-tracking-transparency";
 import ReaderScreen from "./screens/ReaderScreen";
 import HistoryScreen from "./screens/HistoryScreen";
 import SubscriptionScreen from "./screens/SubscriptionScreen";
+import AIConsentScreen from "./screens/AIConsentScreen";
 import { REVENUECAT_ANDROID_KEY } from "./lib/config";
 import { getDeviceId } from "./lib/device";
 import Purchases from "react-native-purchases";
 import LanguageChooser from "./screens/LanguageChooser";
 import { useAppLanguage } from "./i18n";
+
+const AI_CONSENT_KEY = "freesurf-reader-ai-consent-v1";
 
 const darkTheme = {
   ...MD3DarkTheme,
@@ -60,7 +64,17 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   const [isDark, setIsDark] = useState(true);
+  const [aiConsent, setAiConsent] = useState<boolean | null>(null);
   const { loaded: langLoaded, chosen: langChosen, setLanguage } = useAppLanguage();
+
+  useEffect(() => {
+    AsyncStorage.getItem(AI_CONSENT_KEY).then((v) => setAiConsent(v === "true")).catch(() => setAiConsent(false));
+  }, []);
+
+  const agreeAiConsent = async () => {
+    setAiConsent(true);
+    AsyncStorage.setItem(AI_CONSENT_KEY, "true").catch(() => {});
+  };
 
   useEffect(() => {
     if (Platform.OS !== "ios") return;
@@ -109,6 +123,14 @@ export default function App() {
       <PaperProvider theme={isDark ? darkTheme : lightTheme}>
         <StatusBar style="light" />
         <LanguageChooser onSelect={setLanguage} />
+      </PaperProvider>
+    );
+  }
+  if (aiConsent === false) {
+    return (
+      <PaperProvider theme={isDark ? darkTheme : lightTheme}>
+        <StatusBar style="light" />
+        <AIConsentScreen onAgree={agreeAiConsent} />
       </PaperProvider>
     );
   }
