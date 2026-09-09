@@ -7,6 +7,7 @@ import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
 import { requestTrackingPermissionsAsync, getTrackingPermissionsAsync } from "expo-tracking-transparency";
 import ReaderScreen from "./screens/ReaderScreen";
 import HistoryScreen from "./screens/HistoryScreen";
+import SubscriptionScreen from "./screens/SubscriptionScreen";
 import LanguageChooser from "./screens/LanguageChooser";
 import { useAppLanguage } from "./i18n";
 
@@ -49,6 +50,7 @@ const lightTheme = {
 export type RootStackParamList = {
   Reader: { isDark?: boolean; noteId?: string } | undefined;
   History: { isDark?: boolean } | undefined;
+  Subscription: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -104,6 +106,9 @@ export default function App() {
           )}</Stack.Screen>
           <Stack.Screen name="History">{(props) => (
             <HistoryScreen {...props} />
+          )}</Stack.Screen>
+          <Stack.Screen name="Subscription">{(props) => (
+            <SubscriptionScreen onBack={() => props.navigation.goBack()} />
           )}</Stack.Screen>
         </Stack.Navigator>
       </NavigationContainer>

@@ -22,6 +22,14 @@ export const translations: Record<Lang, Strings> = {
     menuSupport: "Support",
     menuPrivacy: "Privacy",
     menuTerms: "Terms",
+    goPro: "Go Pro", proBadge: "PRO", proTitle: "Reader Pro",
+    proSubtitle: "Unlimited read-aloud for articles and notes.",
+    proPrice: "$20", proPerMonth: "/ month",
+    featureUnlimited: "Unlimited read-aloud minutes",
+    featureNoAds: "No ads",
+    subscribeCta: "Subscribe", restoreCta: "Restore Purchase",
+    cancelAnytime: "Cancel anytime in Google Play or the App Store.",
+    proNote: "Subscriptions keep the free tier free for everyone.",
     untitled: "Untitled",
     restart: "Restart",
   },
@@ -173,6 +181,11 @@ export function deviceLang(): Lang {
   } catch {
     return DEFAULT_LANG;
   }
+}
+
+export function translationsFor(lang: Lang): Strings {
+  const en = translations[DEFAULT_LANG] ?? {};
+  return { ...en, ...(translations[lang] ?? {}) };
 }
 
 export function useAppLanguage(): {

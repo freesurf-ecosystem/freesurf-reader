@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import FloatingHamburger from "../components/FloatingHamburger";
-import { translations, useAppLanguage } from "../i18n";
+import { translationsFor, useAppLanguage } from "../i18n";
 import { Play, Pause, Share2, X, EllipsisVertical, Plus, Pencil } from "lucide-react-native";
 
 const HISTORY_PATH = FileSystem.documentDirectory + "reader-audio/history.json";
@@ -35,7 +35,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
     ? { bg: "#000000", card: "#0d0d0d", text: "#e8ecff", dim: "#8899bb", border: "#1a1a1a", accent: "#5b8cff" }
     : { bg: "#f8f9fa", card: "#ffffff", text: "#111827", dim: "#6b7280", border: "#e5e7eb", accent: "#2563eb" };
   const { lang } = useAppLanguage();
-  const T = translations[lang];
+  const T = translationsFor(lang);
 
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -244,6 +244,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
           </View>
           <FloatingHamburger inline topOffset={topPad + 44} colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }}
             menuItems={[
+              { label: T.goPro, onPress: () => navigation.navigate("Subscription") },
               { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
               { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
               { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },

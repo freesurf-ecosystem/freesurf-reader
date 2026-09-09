@@ -16,7 +16,7 @@ import type { RootStackParamList } from "../App";
 import { textToSpeech, VOICES, type Voice } from "../lib/tts";
 import FloatingHamburger from "../components/FloatingHamburger";
 import UsageMeter from "../components/UsageMeter";
-import { translations, useAppLanguage } from "../i18n";
+import { translationsFor, useAppLanguage } from "../i18n";
 import { FileText, Mic, Home, Play, Pause } from "lucide-react-native";
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; noteId?: string; isDark?: boolean; onToggleTheme?: () => void; };
@@ -62,7 +62,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { lang } = useAppLanguage();
-  const T = translations[lang];
+  const T = translationsFor(lang);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
@@ -337,6 +337,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
               colors={hbColors}
               footer={themeToggleFooter}
               menuItems={[
+                { label: T.goPro, onPress: () => navigation.navigate("Subscription") },
                 { label: "Dashboard", onPress: () => navigation.navigate("History", { isDark }) },
                 { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
                 { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
