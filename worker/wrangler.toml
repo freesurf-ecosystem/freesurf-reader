@@ -8,8 +8,12 @@ routes = [
 
 [vars]
 ENVIRONMENT = "production"
+SUPABASE_URL = "https://jstojewashwoswsskwjk.supabase.co"
+USAGE_METERING = "on"
+READER_MONTHLY_CHARS = "22000"
 
 # Secrets to set via `wrangler secret put`:
-#   POD_URL   — the consolidated AI pod URL (e.g. https://<pod-id>-8000.proxy.runpod.net)
-#   TOGETHER_API_KEY - when set, TTS runs on Together Kokoro (hosted) instead of the pod
+#   POD_URL            - the consolidated AI pod URL (e.g. https://<pod-id>-8000.proxy.runpod.net)
+#   TOGETHER_API_KEY   - when set, TTS runs on Together Kokoro (hosted) instead of the pod
 #   TOGETHER_TTS_VOICE - optional default Kokoro voice override
+#   SUPABASE_SECRET_KEY - server-side key for reading/writing the usage table (metering)
