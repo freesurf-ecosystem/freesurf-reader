@@ -64,7 +64,7 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
   const [aiConsent, setAiConsent] = useState<boolean | null>(null);
   const { loaded: langLoaded, chosen: langChosen, setLanguage } = useAppLanguage();
 
