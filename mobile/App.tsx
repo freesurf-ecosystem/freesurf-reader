@@ -58,6 +58,7 @@ export type RootStackParamList = {
   Reader: { isDark?: boolean; noteId?: string } | undefined;
   History: { isDark?: boolean } | undefined;
   Subscription: undefined;
+  Language: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -127,6 +128,9 @@ export default function App() {
           )}</Stack.Screen>
           <Stack.Screen name="Subscription">{(props) => (
             <SubscriptionScreen onBack={() => props.navigation.goBack()} />
+          )}</Stack.Screen>
+          <Stack.Screen name="Language">{(props) => (
+            <LanguageChooser onSelect={(code) => { setLanguage(code); props.navigation.goBack(); }} onBack={() => props.navigation.goBack()} />
           )}</Stack.Screen>
         </Stack.Navigator>
       </NavigationContainer>

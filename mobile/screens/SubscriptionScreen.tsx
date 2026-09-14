@@ -122,7 +122,6 @@ export default function SubscriptionScreen({ onBack }: Props) {
                 </View>
               ))}
             </Surface>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: "center", lineHeight: 18 }}>{T.proNote}</Text>
           </>
         )}
       </ScrollView>

@@ -157,7 +157,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
               ) : (
                 <>
                   <TouchableOpacity onPress={() => navigation.navigate("Reader", { noteId: item.id })}>
-                    <Text style={[s.title, { color: c.text }]} numberOfLines={1}>{item.title}</Text>
+                    <Text style={[s.title, { color: c.text }]} numberOfLines={1}>{item.title || T.untitled}</Text>
                   </TouchableOpacity>
                   <Text style={[s.meta, { color: c.dim }]}>
                     {item.voice} · {formatDate(item.createdAt)}
@@ -245,9 +245,10 @@ export default function HistoryScreen({ navigation, route }: Props) {
           <FloatingHamburger inline topOffset={topPad + 44} colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }}
             menuItems={[
               { label: T.goPro, onPress: () => navigation.navigate("Subscription") },
-              { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
-              { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
-              { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
+              { label: T.languageLabel, onPress: () => navigation.navigate("Language") },
+              { label: T.menuSupport, onPress: () => Linking.openURL("https://freesurf.tools/support") },
+              { label: T.menuPrivacy, onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
+              { label: T.menuTerms, onPress: () => Linking.openURL("https://freesurf.tools/terms") },
             ]} />
         </View>
       </View>

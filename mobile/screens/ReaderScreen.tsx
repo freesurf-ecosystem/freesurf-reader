@@ -75,6 +75,12 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
   const [savedToast, setSavedToast] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
 
+  // Only offer voices for the app's current language (Kokoro voices are language-specific).
+  const voices = VOICES.filter((v) => v.language === lang);
+  useEffect(() => {
+    if (selectedVoice.language !== lang && voices[0]) setSelectedVoice(voices[0]);
+  }, [lang]);
+
   // Attached-audio player (the "Recordings" playback engine, now inline in the editor)
   const [noteUris, setNoteUris] = useState<string[]>([]);
   const [pos, setPos] = useState(0);
@@ -143,7 +149,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
         const hist = await FileSystem.readAsStringAsync(HISTORY_PATH).then(j => JSON.parse(j)).catch(() => []);
         const i = hist.findIndex((r: any) => r.id === editingId);
         if (i >= 0) {
-          hist[i].title = title.trim() || "Untitled";
+          hist[i].title = title.trim();
           await safeWriteHistory(hist.slice(0, 50));
           setHistoryCount(Math.min(hist.length, 50));
         }
@@ -338,10 +344,11 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
               footer={themeToggleFooter}
               menuItems={[
                 { label: T.goPro, onPress: () => navigation.navigate("Subscription") },
-                { label: "Dashboard", onPress: () => navigation.navigate("History", { isDark }) },
-                { label: "Support", onPress: () => Linking.openURL("https://freesurf.tools/support") },
-                { label: "Privacy", onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
-                { label: "Terms", onPress: () => Linking.openURL("https://freesurf.tools/terms") },
+                { label: T.dashboardLabel, onPress: () => navigation.navigate("History", { isDark }) },
+                { label: T.languageLabel, onPress: () => navigation.navigate("Language") },
+                { label: T.menuSupport, onPress: () => Linking.openURL("https://freesurf.tools/support") },
+                { label: T.menuPrivacy, onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
+                { label: T.menuTerms, onPress: () => Linking.openURL("https://freesurf.tools/terms") },
               ]}
             />
           </View>
@@ -430,7 +437,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
           <Surface style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 48 }}>
             <Text variant="titleMedium" style={{ fontWeight: "700", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.outline }}>{T.voicePickerTitle}</Text>
             <ScrollView style={{ maxHeight: 420 }} bounces={false}>
-              {VOICES.map(v => (
+              {voices.map(v => (
                 <View key={v.id} style={{ borderBottomWidth: 0.5, borderBottomColor: theme.colors.outline }}>
                   <Button mode="text" onPress={() => { setSelectedVoice(v); setShowVoicePicker(false); }}
                     contentStyle={{ flexDirection: "column", alignItems: "flex-start", paddingVertical: 12, paddingHorizontal: 20, gap: 2 }}
