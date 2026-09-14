@@ -24,6 +24,7 @@ export interface Env {
 
 const READER_METRIC = "reader_chars";
 const READER_ENTITLEMENT = "pro_reader";
+const CONSENT_VERSION = "2026-09-09";
 const DEFAULT_MONTHLY_CHARS = 300000;
 
 // First of the current UTC month, as yyyy-mm-dd — monthly allowance bucket.
@@ -91,6 +92,20 @@ async function rcIsPro(env: Env, appUserId: string): Promise<boolean> {
     if (!ent) return false;
     if (!ent.expires_date) return true;
     return new Date(ent.expires_date).getTime() > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+// Records a consent acceptance (append-only audit) keyed by the resolved user id.
+async function recordConsent(env: Env, userId: string, type: string, version: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/consents`, {
+      method: "POST",
+      headers: { ...srHeaders(env), "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ user_id: userId, type, version }),
+    });
+    return res.ok;
   } catch {
     return false;
   }
@@ -231,6 +246,19 @@ export default {
 
     if (request.method !== "POST") {
       return jsonResponse({ error: "Method not allowed" }, 405, headers);
+    }
+
+    // ── Consent record (POST /api/consent) — audit trail, anonymous or account keyed ──
+    if (url.pathname === "/api/consent") {
+      if (env.USAGE_METERING !== "on" || !env.SUPABASE_SECRET_KEY || !env.SUPABASE_URL) {
+        return jsonResponse({ ok: true }, 200, headers);
+      }
+      const userId = await resolveUserId(env, request);
+      if (!userId) return jsonResponse({ error: "Missing device id" }, 401, headers);
+      let body: { type?: string; version?: string } = {};
+      try { body = (await request.json()) as { type?: string; version?: string }; } catch {}
+      const ok = await recordConsent(env, userId, body.type || "terms", body.version || CONSENT_VERSION);
+      return jsonResponse({ ok }, ok ? 200 : 500, headers);
     }
 
     try {

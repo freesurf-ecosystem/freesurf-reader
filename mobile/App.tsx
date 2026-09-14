@@ -11,6 +11,7 @@ import SubscriptionScreen from "./screens/SubscriptionScreen";
 import AIConsentScreen from "./screens/AIConsentScreen";
 import { REVENUECAT_ANDROID_KEY } from "./lib/config";
 import { getDeviceId } from "./lib/device";
+import { recordConsent } from "./lib/consent";
 import Purchases from "react-native-purchases";
 import LanguageChooser from "./screens/LanguageChooser";
 import { useAppLanguage } from "./i18n";
@@ -73,6 +74,7 @@ export default function App() {
   const agreeAiConsent = async () => {
     setAiConsent(true);
     AsyncStorage.setItem(AI_CONSENT_KEY, "true").catch(() => {});
+    recordConsent();
   };
 
   // Configure RevenueCat (Google Play) once at launch when a real SDK key is present.
