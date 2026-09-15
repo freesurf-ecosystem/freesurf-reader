@@ -2,7 +2,7 @@
   "expo": {
     "name": "Reader",
     "slug": "freesurf-natural-reader",
-    "version": "0.1.14",
+    "version": "0.1.15",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,7 +15,7 @@
     ],
     "android": {
       "package": "tools.freesurf.reader",
-      "versionCode": 15
+      "versionCode": 16
     },
     "ios": {
       "bundleIdentifier": "tools.freesurf.reader",
@@ -52,7 +52,8 @@
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
             "buildToolsVersion": "36.0.0",
-            "useLegacyPackaging": false
+            "useLegacyPackaging": false,
+            "blockedPermissions": ["com.google.android.gms.permission.AD_ID"]
           }
         }
       ],
