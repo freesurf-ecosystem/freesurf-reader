@@ -16,8 +16,8 @@ import type { RootStackParamList } from "../App";
 import { textToSpeech, VOICES, type Voice } from "../lib/tts";
 import FloatingHamburger from "../components/FloatingHamburger";
 import UsageMeter from "../components/UsageMeter";
-import { translationsFor, useAppLanguage } from "../i18n";
-import { FileText, Mic, Home, Play, Pause } from "lucide-react-native";
+import { translationsFor, useAppLanguage, voiceDescription } from "../i18n";
+import { FileText, Mic, Speaker, Play, Pause } from "lucide-react-native";
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; noteId?: string; isDark?: boolean; onToggleTheme?: () => void; };
 
@@ -223,7 +223,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
       await playFrom(uris, 0, 0);
     } catch (e: any) {
       setIsGenerating(false);
-      Alert.alert("Error", e.message || "Failed to generate audio.");
+      Alert.alert(T.errorTitle, e.message || T.generateFailed);
     }
   }
 
@@ -302,7 +302,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
       const content = await FileSystem.readAsStringAsync(f.uri, { encoding: FileSystem.EncodingType.UTF8 });
       setText(content);
     } catch (e: any) {
-      if (!String(e).includes("canceled")) Alert.alert("Import failed", e.message);
+      if (!String(e).includes("canceled")) Alert.alert(T.importFailed, e.message);
     }
     setIsImporting(false);
   }
@@ -316,7 +316,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
 
   const themeToggleFooter = onToggleTheme ? (
     <View style={{ flexDirection: "column", gap: 10, alignItems: "center" }}>
-      <TouchableOpacity onPress={onToggleTheme} accessibilityLabel="Toggle theme" hitSlop={8} style={{ padding: 4 }}>
+      <TouchableOpacity onPress={onToggleTheme} accessibilityLabel={T.toggleTheme} hitSlop={8} style={{ padding: 4 }}>
         <Text style={{ fontSize: 26, color: hbColors.text }}>◐</Text>
       </TouchableOpacity>
       <UsageMeter colors={hbColors} />
@@ -325,7 +325,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.colors.background }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      {/* Unified nav bar: safe-area top, home (dashboard) left, hamburger right */}
+      {/* Unified nav bar: safe-area top, recordings (speaker) left, hamburger right */}
       <View style={{ backgroundColor: theme.colors.background }}>
         <View style={{ paddingTop: insets.top }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", height: 48, paddingHorizontal: 6, borderBottomWidth: 0.5, borderBottomColor: theme.colors.outline }}>
@@ -333,9 +333,9 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
               onPress={() => navigation.navigate("History", { isDark })}
               style={{ padding: 8 }}
               accessibilityRole="button"
-              accessibilityLabel="Dashboard"
+              accessibilityLabel={T.recordingsLabel}
             >
-              <Home size={22} color={theme.colors.onSurface} />
+              <Speaker size={22} color={theme.colors.onSurface} />
             </TouchableOpacity>
             <FloatingHamburger
               inline
@@ -344,7 +344,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
               footer={themeToggleFooter}
               menuItems={[
                 { label: T.goPro, onPress: () => navigation.navigate("Subscription") },
-                { label: T.dashboardLabel, onPress: () => navigation.navigate("History", { isDark }) },
+                { label: T.recordingsLabel, onPress: () => navigation.navigate("History", { isDark }) },
                 { label: T.languageLabel, onPress: () => navigation.navigate("Language") },
                 { label: T.menuSupport, onPress: () => Linking.openURL("https://freesurf.tools/support") },
                 { label: T.menuPrivacy, onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
@@ -399,7 +399,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
               <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12, minWidth: 64, textAlign: "right" }}>{timeLabel()}</Text>
             </View>
             <View style={{ flexDirection: "row", gap: 8, justifyContent: "center", marginTop: 6 }}>
-              {[["-15s", -15000], ["Restart", null], ["+15s", 15000]].map(([label, delta]) => (
+              {[["-15s", -15000], [T.restart, null], ["+15s", 15000]].map(([label, delta]) => (
                 <TouchableOpacity key={label as string} onPress={() => {
                   const cur = (chunkIndex > 0 ? cumulative[chunkIndex - 1] || 0 : 0) + pos;
                   if (delta == null) { setPos(0); soundRef.current?.setPositionAsync(0).catch(() => {}); }
@@ -446,7 +446,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
                       {selectedVoice.id === v.id && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.primary, alignSelf: "center" }} />}
                       <Text style={{ fontWeight: selectedVoice.id === v.id ? "700" : "400", fontSize: 15 }}>{v.label} </Text>
                     </View>
-                    <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2, marginLeft: selectedVoice.id === v.id ? 10 : 0 }}>{v.description}</Text>
+                    <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2, marginLeft: selectedVoice.id === v.id ? 10 : 0 }}>{voiceDescription(v, T)}</Text>
                   </Button>
                 </View>
               ))}

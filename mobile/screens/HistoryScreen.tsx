@@ -132,7 +132,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
   async function saveRename() { const id = editingId; if (!id || !editingTitle.trim()) { cancelRename(); return; } await persist(recordings.map(r => r.id === id ? { ...r, title: editingTitle.trim() } : r)); cancelRename(); }
   async function shareItem(item: Recording) { if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(item.uri); }
   function deleteItem(item: Recording) {
-    Alert.alert("Delete", `Delete "${item.title}"?`, [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: async () => {
+    Alert.alert(T.deleteTitle, T.deleteConfirm.replace("{title}", item.title), [{ text: T.cancel, style: "cancel" }, { text: T.deleteTitle, style: "destructive", onPress: async () => {
       const uris = item.uris || [item.uri];
       for (const u of uris) { FileSystem.deleteAsync(u, { idempotent: true }).catch(() => {}); }
       await persist(recordings.filter(r => r.id !== item.id));
@@ -166,7 +166,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
                 {item.processing && (
                   <View style={s.processing}>
                     <ActivityIndicator size="small" color={c.accent} />
-                    <Text style={[s.processingT, { color: c.dim }]}>Processing audio...</Text>
+                    <Text style={[s.processingT, { color: c.dim }]}>{T.processingAudio}</Text>
                   </View>
                 )}
               </>
@@ -206,7 +206,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
             </View>
             <View style={s.ctrls}>
               <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => jump(-15000)}><Text style={[s.ctrlT, { color: c.text }]}>-15s</Text></TouchableOpacity>
-              <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => { setPos(0); soundRef.current?.setPositionAsync(0); }}><Text style={[s.ctrlT, { color: c.text }]}>Restart</Text></TouchableOpacity>
+              <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => { setPos(0); soundRef.current?.setPositionAsync(0); }}><Text style={[s.ctrlT, { color: c.text }]}>{T.restart}</Text></TouchableOpacity>
               <TouchableOpacity style={[s.ctrl, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => jump(15000)}><Text style={[s.ctrlT, { color: c.text }]}>+15s</Text></TouchableOpacity>
             </View>
 
@@ -216,11 +216,11 @@ export default function HistoryScreen({ navigation, route }: Props) {
               </TouchableOpacity>
               {isEditing ? (
                 <>
-                  <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={saveRename}><Text style={[s.actT, { color: c.text }]}>Save</Text></TouchableOpacity>
-                  <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={cancelRename}><Text style={[s.actT, { color: c.text }]}>Cancel</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={saveRename}><Text style={[s.actT, { color: c.text }]}>{T.save}</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={cancelRename}><Text style={[s.actT, { color: c.text }]}>{T.cancel}</Text></TouchableOpacity>
                 </>
               ) : (
-                <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => startRename(item)}><Text style={[s.actT, { color: c.text }]}>Rename</Text></TouchableOpacity>
+                <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => startRename(item)}><Text style={[s.actT, { color: c.text }]}>{T.rename}</Text></TouchableOpacity>
               )}
               <TouchableOpacity style={[s.act, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => shareItem(item)}><Share2 size={16} color={c.text} /></TouchableOpacity>
               <TouchableOpacity style={[s.del, { borderColor: c.border, backgroundColor: c.bg }]} onPress={() => deleteItem(item)}><X size={18} color="#f87171" /></TouchableOpacity>
@@ -238,7 +238,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <Text style={[s.homeTitle, { color: c.text }]}>{T.recordingsTitle}</Text>
-            <TouchableOpacity onPress={() => navigation.navigate("Reader", {})} hitSlop={8} accessibilityRole="button" accessibilityLabel="New note">
+            <TouchableOpacity onPress={() => navigation.navigate("Reader", {})} hitSlop={8} accessibilityRole="button" accessibilityLabel={T.newNote}>
               <Plus size={24} color={c.text} />
             </TouchableOpacity>
           </View>
