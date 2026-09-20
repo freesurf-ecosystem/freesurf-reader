@@ -17,7 +17,7 @@ import { textToSpeech, VOICES, type Voice } from "../lib/tts";
 import FloatingHamburger from "../components/FloatingHamburger";
 import UsageMeter from "../components/UsageMeter";
 import { translationsFor, useAppLanguage, voiceDescription } from "../i18n";
-import { FileText, Mic, Speaker, Play, Pause } from "lucide-react-native";
+import { FileText, Mic, Volume2, Play, Pause } from "lucide-react-native";
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, "Reader">; noteId?: string; isDark?: boolean; onToggleTheme?: () => void; };
 
@@ -89,6 +89,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
   const [chunkDurs, setChunkDurs] = useState<number[]>([]);
   const soundRef = useRef<Audio.Sound | null>(null);
   const nextSoundRef = useRef<Audio.Sound | null>(null);
+  const playTokenRef = useRef(0);
   const progW = useRef(0);
   const totalDur = chunkDurs.reduce((s, d) => s + d, 0);
   const cumulative = chunkDurs.reduce<number[]>((a, d, i) => { a.push((a[i - 1] || 0) + d); return a; }, []);
@@ -230,17 +231,25 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
   // ---- Attached-audio playback (chunked, seekable) ----
   async function playFrom(uris: string[], ci: number, at: number) {
     if (!uris.length || ci >= uris.length) return;
+    await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true }).catch(() => {});
+    const token = ++playTokenRef.current;
     await soundRef.current?.stopAsync().catch(() => {});
     await soundRef.current?.unloadAsync().catch(() => {});
     await nextSoundRef.current?.unloadAsync().catch(() => {});
+    soundRef.current = null; nextSoundRef.current = null;
     const playChunk = (idx: number, startAt: number) => {
+      if (token !== playTokenRef.current) return;
       if (idx >= uris.length) { setIsPlaying(false); setChunkIndex(0); setPos(0); return; }
       setChunkIndex(idx);
       if (idx + 1 < uris.length) {
         nextSoundRef.current?.unloadAsync().catch(() => {});
-        Audio.Sound.createAsync({ uri: uris[idx + 1] }, { shouldPlay: false }).then(({ sound: nx }) => { nextSoundRef.current = nx; }).catch(() => {});
+        Audio.Sound.createAsync({ uri: uris[idx + 1] }, { shouldPlay: false }).then(({ sound: nx }) => {
+          if (token !== playTokenRef.current) { nx.unloadAsync().catch(() => {}); return; }
+          nextSoundRef.current = nx;
+        }).catch(() => {});
       }
       Audio.Sound.createAsync({ uri: uris[idx] }, { shouldPlay: true, positionMillis: startAt }, (st: any) => {
+        if (token !== playTokenRef.current) return;
         if (st.isLoaded) {
           setPos(st.positionMillis); setDur(st.durationMillis || 0);
           if (st.didJustFinish) {
@@ -249,21 +258,26 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
             else playChunk(idx + 1, 0);
           }
         }
-      }).then(({ sound }) => { soundRef.current = sound; }).catch(() => {});
+      }).then(({ sound }) => {
+        if (token !== playTokenRef.current) { sound.unloadAsync().catch(() => {}); return; }
+        soundRef.current = sound;
+      }).catch(() => {});
     };
     setIsPlaying(true);
     playChunk(ci, at);
   }
 
+  function stopAudio() {
+    playTokenRef.current += 1;
+    soundRef.current?.stopAsync().catch(() => {});
+    soundRef.current?.unloadAsync().catch(() => {});
+    nextSoundRef.current?.unloadAsync().catch(() => {});
+    soundRef.current = null; nextSoundRef.current = null;
+    setIsPlaying(false); setPos(0); setChunkIndex(0);
+  }
+
   async function toggleAttached() {
-    if (isPlaying) {
-      await soundRef.current?.stopAsync().catch(() => {});
-      await soundRef.current?.unloadAsync().catch(() => {});
-      await nextSoundRef.current?.unloadAsync().catch(() => {});
-      soundRef.current = null; nextSoundRef.current = null;
-      setIsPlaying(false); setPos(0); setChunkIndex(0);
-      return;
-    }
+    if (isPlaying) { stopAudio(); return; }
     if (!noteUris.length) return;
     setIsPlaying(true);
     await playFrom(noteUris, chunkIndex, pos);
@@ -287,10 +301,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
     return `${f(cur)} / ${f(total)}`;
   }
 
-  async function stopPlayback() {
-    try { await soundRef.current?.stopAsync(); await soundRef.current?.unloadAsync(); } catch {}
-    soundRef.current = null; setIsPlaying(false);
-  }
+  async function stopPlayback() { stopAudio(); }
 
   async function handleImport() {
     setIsImporting(true);
@@ -305,6 +316,14 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
       if (!String(e).includes("canceled")) Alert.alert(T.importFailed, e.message);
     }
     setIsImporting(false);
+  }
+
+  function startNewNote() {
+    soundRef.current?.unloadAsync().catch(() => {});
+    nextSoundRef.current?.unloadAsync().catch(() => {});
+    setEditingId(null); setTitle(""); setText(""); setNoteUris([]);
+    setPos(0); setDur(0); setChunkIndex(0); setChunkDurs([]);
+    navigation.navigate("Reader", {});
   }
 
   const hbColors = {
@@ -335,7 +354,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
               accessibilityRole="button"
               accessibilityLabel={T.recordingsLabel}
             >
-              <Speaker size={22} color={theme.colors.onSurface} />
+              <Volume2 size={22} color={theme.colors.onSurface} />
             </TouchableOpacity>
             <FloatingHamburger
               inline
@@ -343,8 +362,9 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
               colors={hbColors}
               footer={themeToggleFooter}
               menuItems={[
-                { label: T.goPro, onPress: () => navigation.navigate("Subscription") },
                 { label: T.recordingsLabel, onPress: () => navigation.navigate("History", { isDark }) },
+                { label: T.addTextToRecord, onPress: startNewNote },
+                { label: T.goPro, onPress: () => navigation.navigate("Subscription") },
                 { label: T.languageLabel, onPress: () => navigation.navigate("Language") },
                 { label: T.menuSupport, onPress: () => Linking.openURL("https://freesurf.tools/support") },
                 { label: T.menuPrivacy, onPress: () => Linking.openURL("https://freesurf.tools/privacy") },
@@ -362,7 +382,7 @@ export default function ReaderScreen({ navigation, noteId, isDark, onToggleTheme
           cursorColor={theme.colors.primary} selectionColor={theme.colors.primary} />
 
         <PaperInput mode="flat"
-          style={{ minHeight: inputHeight, fontSize: 17, lineHeight: 26, backgroundColor: "transparent", marginTop: 8 }}
+          style={{ minHeight: inputHeight, fontSize: 17, lineHeight: 22, backgroundColor: "transparent", marginTop: 8 }}
           placeholder={T.textPlaceholder}
           placeholderTextColor={theme.colors.onSurfaceVariant}
           value={text} onChangeText={setText}

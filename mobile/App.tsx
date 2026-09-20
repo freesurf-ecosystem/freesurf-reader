@@ -3,6 +3,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { Platform } from "react-native";
+import { Audio } from "expo-av";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
 import ReaderScreen from "./screens/ReaderScreen";
@@ -67,6 +68,12 @@ export default function App() {
   const [isDark, setIsDark] = useState(false);
   const [aiConsent, setAiConsent] = useState<boolean | null>(null);
   const { loaded: langLoaded, chosen: langChosen, setLanguage } = useAppLanguage();
+
+  // Play audio through the main speaker even when the iPhone silent/mute switch is on.
+  // expo-av defaults playsInSilentModeIOS to false, which makes playback silent on iOS.
+  useEffect(() => {
+    Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(AI_CONSENT_KEY).then((v) => setAiConsent(v === "true")).catch(() => setAiConsent(false));

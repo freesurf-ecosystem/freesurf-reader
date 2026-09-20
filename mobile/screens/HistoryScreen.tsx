@@ -81,6 +81,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
     await togglePlayAt(item, 0, 0);
   }
   async function togglePlayAt(item: Recording, ci: number, posMs: number) {
+    await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true }).catch(() => {});
     const uris = item.uris && item.uris.length > 0 ? item.uris : [item.uri];
     await soundRef.current?.stopAsync().catch(() => {});
     await soundRef.current?.unloadAsync().catch(() => {});
@@ -244,6 +245,8 @@ export default function HistoryScreen({ navigation, route }: Props) {
           </View>
           <FloatingHamburger inline topOffset={topPad + 44} colors={{ text: c.text, dim: c.dim, card: c.card, border: c.border }}
             menuItems={[
+              { label: T.recordingsLabel, onPress: () => navigation.navigate("History", { isDark }) },
+              { label: T.addTextToRecord, onPress: () => navigation.navigate("Reader", {}) },
               { label: T.goPro, onPress: () => navigation.navigate("Subscription") },
               { label: T.languageLabel, onPress: () => navigation.navigate("Language") },
               { label: T.menuSupport, onPress: () => Linking.openURL("https://freesurf.tools/support") },
@@ -252,7 +255,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
             ]} />
         </View>
       </View>
-      <FlatList data={recordings} keyExtractor={(r) => r.id} contentContainerStyle={[s.list, { paddingTop: topPad + 56 }]} removeClippedSubviews={false}
+      <FlatList data={recordings} keyExtractor={(r) => r.id} contentContainerStyle={[s.list, { paddingTop: topPad + 42 }]} removeClippedSubviews={false}
         ListEmptyComponent={<View style={s.empty}><Text style={[s.emptyT, { color: c.text }]}>{T.noRecordings}</Text><Text style={[s.emptyS, { color: c.dim }]}>{T.createFirst}</Text></View>}
         renderItem={({ item }) => renderCard(item)} />
     </View>
@@ -261,7 +264,7 @@ export default function HistoryScreen({ navigation, route }: Props) {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  list: { padding: 16, paddingBottom: 48 },
+  list: { padding: 8, paddingBottom: 48 },
   homeTitle: { fontSize: 20, fontWeight: "800" },
   plusBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", paddingTop: 80 },
